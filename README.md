@@ -13,6 +13,11 @@
 - 标准件下单确认
 - 定制需求表单、线索评分与销售/技术分流
 - 销售与技术人员结构化摘要
+- 标准订单与定制需求统一进入线索队列
+- 销售工作台支持筛选、评分、SLA、工程评审、培育和机会转化
+- 演示线索与跟进状态在浏览器本地持久化
+- 客户端与管理端分离：客户网站 `/`，销售运营管理端 `/admin`
+- 管理端覆盖经营概览、线索中心、客户档案、订单管理和跟进任务
 - 桌面端和移动端响应式界面
 
 产品图片和演示参数来自项目提供的 `Joynext robotics product intro 20260729.pptx`。工程状态、价格与交期仅用于原型演示，最终信息应由 JOYNEXT 销售或工程师确认。
@@ -45,3 +50,25 @@ npm run build
 ## 在线原型
 
 [打开已部署的 JOYNEXT 机器人部件选型原型](https://joynext-robotics-configurator.sunset-sun-1233.chatgpt.site)
+
+## GitHub Actions 自动部署
+
+推送或合并代码到 `main` 后，[deploy-main.yml](.github/workflows/deploy-main.yml)
+会依次执行代码检查、测试、Docker 镜像构建和蓝绿部署。生产访问地址：
+
+- 客户端：<https://www.atlasfish.work/joynext/>
+- 管理端：<https://www.atlasfish.work/joynext/admin>
+
+在 GitHub 仓库的 `Settings → Secrets and variables → Actions` 中配置：
+
+| Secret | 值 |
+| --- | --- |
+| `DEPLOY_HOST` | `122.51.190.67` |
+| `DEPLOY_USER` | `root` |
+| `DEPLOY_PASSWORD` | 私有服务器当前 SSH 登录密码 |
+
+镜像发布到 GitHub Container Registry，认证使用工作流自带的
+`GITHUB_TOKEN`，无需额外配置 Registry 密码。服务器端部署会复用
+`atlasfish_proxy` Docker 网络，并在现有 Nginx HTTPS 虚拟主机中自动加入
+`/joynext/` 路由。应用容器和静态资源采用 blue/green 槽位切换；新版本健康
+检查或 Nginx 配置检查失败时，不会替换当前可用版本。

@@ -1,0 +1,13 @@
+.git
+.github
+.sites-runtime
+.vinext
+.wrangler
+dist
+node_modules
+coverage
+imgs
+docs
+*.log
+*.tsbuildinfo
+.env*
