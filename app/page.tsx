@@ -207,6 +207,59 @@ function Logo({ inverse = false, onClick }: { inverse?: boolean; onClick?: () =>
   );
 }
 
+function MotionEffects() {
+  useEffect(() => {
+    const root = document.documentElement;
+    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
+    if (reduceMotion.matches) return;
+
+    root.classList.add("motion-ready");
+    let frame = 0;
+    const updateParallax = () => {
+      frame = 0;
+      const scroll = Math.min(window.scrollY, 2400);
+      root.style.setProperty("--parallax-slow", `${scroll * 0.055}px`);
+      root.style.setProperty("--parallax-fast", `${scroll * -0.035}px`);
+    };
+    const onScroll = () => {
+      if (!frame) frame = window.requestAnimationFrame(updateParallax);
+    };
+    updateParallax();
+    window.addEventListener("scroll", onScroll, { passive: true });
+
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("is-visible");
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
+    const observeRevealElement = (element: Element) => {
+      if (element.matches("[data-reveal]")) observer.observe(element);
+      element.querySelectorAll("[data-reveal]").forEach((child) => observer.observe(child));
+    };
+    document.querySelectorAll("[data-reveal]").forEach((element) => observer.observe(element));
+    const mutationObserver = new MutationObserver((mutations) => {
+      mutations.forEach((mutation) => mutation.addedNodes.forEach((node) => {
+        if (node instanceof Element) observeRevealElement(node);
+      }));
+    });
+    mutationObserver.observe(document.body, { childList: true, subtree: true });
+
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (frame) window.cancelAnimationFrame(frame);
+      observer.disconnect();
+      mutationObserver.disconnect();
+      root.classList.remove("motion-ready");
+      root.style.removeProperty("--parallax-slow");
+      root.style.removeProperty("--parallax-fast");
+    };
+  }, []);
+  return null;
+}
+
 function AiAssistantDrawer({
   open,
   onClose,
@@ -508,107 +561,96 @@ function Home({
   onAskAi: (prompt: string) => void;
 }) {
   const [query, setQuery] = useState("");
+  const [catalogFilter, setCatalogFilter] = useState("为你推荐");
   const recommendations = useMemo(() => recommendProducts(brief), [brief]);
   const recommendedId = recommendations[0].product.id;
+  const catalogFilters = ["为你推荐", "全部产品", "计算与控制", "3D 感知", "环境感知", "运动感知"];
   const visible = useMemo(() => {
-    if (!query.trim()) return products;
-    const q = query.toLowerCase();
-    return products.filter((p) => `${p.name}${p.model}${p.kind}${p.description}`.toLowerCase().includes(q));
-  }, [query]);
+    if (query.trim()) {
+      const q = query.toLowerCase();
+      return products.filter((product) =>
+        `${product.name}${product.model}${product.kind}${product.description}${product.verified.join("")}`.toLowerCase().includes(q),
+      );
+    }
+    if (catalogFilter === "为你推荐") return recommendations.slice(0, 4).map(({ product }) => product);
+    if (catalogFilter === "全部产品") return products;
+    return products.filter((product) => product.kind === catalogFilter);
+  }, [catalogFilter, query, recommendations]);
 
   function startSearch(event: FormEvent) {
     event.preventDefault();
-    const product = visible[0] ?? products[0];
-    onSelect(product);
-    onNavigate("standard");
+    if (query.trim() && visible.length) {
+      setCatalogFilter("全部产品");
+      document.getElementById("products")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    } else {
+      onAskAi(query.trim()
+        ? `请根据这个需求帮我搜索产品并给出方案：${query}`
+        : "我还不确定具体型号，请通过几个关键问题帮我完成机器人元器件选型。");
+    }
   }
 
   return (
     <>
       <section className="hero">
+        <div className="hero-ambient ambient-one" data-parallax="slow" />
+        <div className="hero-ambient ambient-two" data-parallax="fast" />
         <div className="hero-grid">
-          <div className="hero-copy">
-            <div className="eyebrow"><span /> JOYNEXT 机器人部件选型中心</div>
-            <h1>从机器人场景出发，<br /><em>更快选对核心部件</em></h1>
-            <p>核对已确认参数、按规则完成选型；标准件直接下单，复杂定制需求由销售与工程师联合接入。</p>
+          <div className="hero-copy" data-reveal>
+            <div className="eyebrow"><span /> ROBOTICS PRODUCT INTELLIGENCE</div>
+            <h1>让复杂选型，<br /><em>回归简单。</em></h1>
+            <p>从任务出发理解需求，以真实产品资料给出候选方案。参数明确就继续配置，边界复杂则无缝交给销售与工程师。</p>
             <form className="search-box" onSubmit={startSearch}>
               <label>
                 <span className="search-icon">⌕</span>
-                <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="搜索产品、型号或参数，例如：EtherCAT 深度相机" />
+                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="描述任务或搜索型号，例如：0.3–4 米 USB 避障" />
               </label>
-              <button type="submit" className="primary-button">搜索产品</button>
+              <button type="submit" className="primary-button">{query.trim() ? "查看匹配" : "问 AI 助理"}</button>
             </form>
             <div className="hot-searches">
-              <span>热门：</span>
-              {["nRB-H1", "鱼眼相机", "深度相机", "IMU"].map((item) => (
-                <button key={item} onClick={() => setQuery(item)}>{item}</button>
+              <span>快速开始</span>
+              {["AMR 避障", "人形机器人姿态", "三维感知", "硬实时控制"].map((item) => (
+                <button key={item} onClick={() => onAskAi(`请围绕“${item}”帮我澄清需求并推荐 JOYNEXT 产品方案。`)}>{item}</button>
               ))}
-              <button className="ask-ai-hot" onClick={() => onAskAi(query.trim() ? `请根据这个需求帮我搜索产品并给出方案：${query}` : "我还不确定具体型号，请通过几个关键问题帮我完成机器人元器件选型。")}>✦ 不确定型号？问 AI</button>
+            </div>
+            <div className="hero-proof">
+              <span><b>{products.length}</b><small>项资料产品</small></span>
+              <i />
+              <span><b>真实 AI</b><small>多轮需求理解</small></span>
+              <i />
+              <span><b>人机协同</b><small>未知边界转人工</small></span>
             </div>
           </div>
-          <div className="hero-visual">
-            <img src={withBasePath("/scenes/amr-warehouse.jpeg")} alt="仓储 AMR 机器人场景" />
-            <div className="hero-overlay">
-              <span className="live-dot" /> 场景方案已上线
-              <strong>AMR 多传感器感知套件</strong>
-              <button onClick={() => onNavigate("standard")}>查看推荐配置 →</button>
+          <div className="hero-product-stage" data-reveal data-parallax="slow">
+            <div className="product-halo" />
+            <span className="stage-kicker">nRB-H1 · ROBOT DOMAIN CONTROLLER</span>
+            <img src={withBasePath("/products/domain-controller.png")} alt="nRB-H1 机器人域控制器" />
+            <div className="stage-caption">
+              <span><i /> 初步工程状态</span>
+              <strong>脑—小脑融合计算平台</strong>
+              <button onClick={() => {
+                const product = products.find((item) => item.id === "controller-h1") ?? products[0];
+                onSelect(product);
+                onNavigate("standard");
+              }}>探索产品 <b>↗</b></button>
             </div>
-            <div className="floating-stat stat-one"><b>{products.length}</b><span>项资料产品</span></div>
-            <div className="floating-stat stat-two"><b>2</b><span>条成交路径</span></div>
+            <div className="stage-spec spec-top"><b>≤ 1 ms</b><span>硬实时控制周期</span></div>
+            <div className="stage-spec spec-bottom"><b>2,070 TOPS</b><span>整机峰值算力</span></div>
           </div>
         </div>
+        <div className="scroll-cue"><span /> 向下探索</div>
       </section>
 
-      <main>
+      <main className="customer-home">
         <AiDiscoveryWorkspace brief={brief} onBriefChange={onBriefChange} onNavigate={onNavigate} onSelect={onSelect} onAskAi={onAskAi} />
 
-        <section className="path-section" id="workflow">
-          <div className="section-heading center">
-            <span>START HERE</span>
-            <h2>你现在要解决哪类需求？</h2>
-            <p>系统根据需求复杂度自动进入标准选型或工程定制流程。</p>
-          </div>
-          <div className="path-grid">
-            <article className="path-card standard" id="standard-order">
-              <div className="path-topline"><span>路径 A</span><b>标准件 · 可直接下单</b></div>
-              <div className="path-icon">✓</div>
-              <div>
-                <h3>参数明确，快速完成配置</h3>
-                <p>适用于接口、量程、尺寸和使用环境已确认的产品。</p>
-                <ul>
-                  <li>查看已确认参数与来源</li>
-                  <li>同类产品快速比较</li>
-                  <li>规则化配置并生成订单</li>
-                </ul>
-              </div>
-              <button className="primary-button" onClick={() => onNavigate("standard")}>开始标准选型 <span>→</span></button>
-            </article>
-            <article className="path-card custom">
-              <div className="path-topline"><span>路径 B</span><b>定制件 · 销售在线接入</b></div>
-              <div className="path-icon">✦</div>
-              <div>
-                <h3>需求复杂，联合工程师评估</h3>
-                <p>适用于结构、接口、环境或交付要求需要联合定义的项目。</p>
-                <ul>
-                  <li>提交结构化需求单</li>
-                  <li>销售部门即时接入</li>
-                  <li>约定报价与工期单生成时间</li>
-                </ul>
-              </div>
-              <button className="dark-button" onClick={() => onNavigate("custom")}>提交定制需求 <span>→</span></button>
-            </article>
-          </div>
-        </section>
-
         <section className="scenario-section" id="scenarios">
-          <div className="section-heading">
-            <span>ROBOT SCENARIOS</span>
-            <h2>按机器人场景进入产品</h2>
-            <p>从应用任务出发，减少跨品类搜索成本。</p>
+          <div className="section-heading split" data-reveal>
+            <div><span>BUILT AROUND THE TASK</span><h2>先看任务，再看部件。</h2></div>
+            <p>不同机器人共享相似的传感器与计算平台，但任务目标、工作距离和系统边界决定真正合适的组合。</p>
           </div>
           <div className="scenario-grid">
-            {scenarios.map((scenario) => (
-              <button className="scenario-card" key={scenario.name} onClick={() => {
+            {scenarios.map((scenario, index) => (
+              <button className="scenario-card" data-reveal style={{ "--reveal-delay": `${index * 90}ms` } as React.CSSProperties} key={scenario.name} onClick={() => {
                 const scene = scenario.name === "机械臂" ? "协作机械臂" : scenario.name as DiscoveryBrief["scene"];
                 const nextBrief = { ...brief, scene };
                 onBriefChange(nextBrief);
@@ -616,36 +658,79 @@ function Home({
                 onNavigate("standard");
               }}>
                 <img src={scenario.image} alt="" />
-                <div><span>{scenario.icon}</span><h3>{scenario.name}</h3><p>{scenario.note}</p><b>AI 已准备场景建议 →</b></div>
+                <div><small>0{index + 1} / SCENARIO</small><span>{scenario.icon}</span><h3>{scenario.name}</h3><p>{scenario.note}</p><b>进入场景 <i>↗</i></b></div>
               </button>
             ))}
           </div>
         </section>
 
         <section className="products-section" id="products">
-          <div className="section-heading split">
-            <div><span>VERIFIED PRODUCTS</span><h2>已确认参数产品</h2><p>参数来自你提供的产品资料；工程状态产品会明确提示复核。</p></div>
-            <button className="outline-button" onClick={() => onNavigate("standard")}>查看全部产品 →</button>
+          <div className="section-heading split" data-reveal>
+            <div><span>CURATED PRODUCT CATALOG</span><h2>只突出此刻有用的信息。</h2><p>参数来自产品资料；工程状态、未知价格与待确认边界会被明确标出。</p></div>
+            <button className="text-arrow-button" onClick={() => onNavigate("standard")}>进入完整比较 <span>↗</span></button>
+          </div>
+          <div className="catalog-toolbar" data-reveal>
+            <div className="catalog-filters">
+              {catalogFilters.map((filter) => (
+                <button className={catalogFilter === filter && !query ? "active" : ""} key={filter} onClick={() => { setCatalogFilter(filter); setQuery(""); }}>{filter}</button>
+              ))}
+            </div>
+            {query && <button className="clear-search" onClick={() => setQuery("")}>清除“{query}” ×</button>}
           </div>
           <div className="product-grid">
-            {visible.map((product) => (
-              <article className={product.id === recommendedId ? "product-card ai-recommended" : "product-card"} key={product.id}>
-                <div className="product-image"><span>{product.kind}</span>{product.id === recommendedId && <b className="ai-match-badge">AI 首选 · {recommendations[0].score}%</b>}<img src={product.image} alt={product.name} /></div>
+            {visible.map((product, index) => (
+              <article className={product.id === recommendedId ? "product-card ai-recommended" : "product-card"} data-reveal style={{ "--reveal-delay": `${index * 70}ms` } as React.CSSProperties} key={product.id}>
+                <div className="product-image">
+                  <span>{product.kind}</span>
+                  {product.id === recommendedId && <b className="ai-match-badge">AI 首选 · {recommendations[0].score}%</b>}
+                  <img src={product.image} alt={product.name} />
+                  <small>{product.status}</small>
+                </div>
                 <div className="product-body">
-                  <small>{product.model}</small>
+                  <small>{product.model} · PPT P.{product.sourceSlide}</small>
                   <h3>{product.name}</h3>
                   <p>{product.description}</p>
-                  <div className="spec-chips">{product.verified.slice(0, 2).map((s) => <span key={s}>✓ {s}</span>)}</div>
-                  <div className="product-foot"><strong>{product.price}</strong><span><button onClick={() => onAskAi(`请解释 ${product.model} ${product.name} 的能力、适用场景、与相近产品的差异，以及哪些信息仍需工程师确认。`)}>问 AI</button><button onClick={() => { onSelect(product); onNavigate("standard"); }}>查看配置 →</button></span></div>
+                  <div className="spec-chips">{product.verified.slice(0, 2).map((spec) => <span key={spec}>{spec}</span>)}</div>
+                  <div className="product-foot">
+                    <button onClick={() => onAskAi(`请解释 ${product.model} ${product.name} 的能力、适用场景、与相近产品的差异，以及哪些信息仍需工程师确认。`)}>问 AI</button>
+                    <button onClick={() => { onSelect(product); onNavigate("standard"); }}>配置 <span>↗</span></button>
+                  </div>
                 </div>
               </article>
             ))}
           </div>
+          {!visible.length && <div className="catalog-empty"><b>暂未找到资料内匹配项</b><p>可以换一个关键词，或让 AI 通过任务描述继续寻找。</p><button onClick={() => onAskAi(`请根据这个需求推荐可用产品：${query}`)}>交给 AI 分析 →</button></div>}
         </section>
 
-        <section className="ai-strip" id="support">
-          <div><span className="ai-orb">AI</span><div><small>贯穿式 AI 协同</small><h2>每一步都保留上下文，不再重复提问</h2><p>场景、目标和项目阶段会持续带入产品推荐、参数解释、配置校验、需求补全和销售摘要；系统级风险仍由工程师确认。</p></div></div>
-          <div className="ai-capability-list"><span>场景导购</span><span>配置校验</span><span>需求补全</span><span>线索摘要</span></div>
+        <section className="path-section" id="workflow">
+          <div className="section-heading center" data-reveal>
+            <span>ONE JOURNEY, TWO PATHS</span>
+            <h2>清楚的需求，走更短的路。</h2>
+            <p>不强迫所有客户填写同一张表。资料内可配置的产品快速提交，复杂边界再进入联合评估。</p>
+          </div>
+          <div className="path-grid">
+            <article className="path-card standard" id="standard-order" data-reveal>
+              <div className="path-topline"><span>01</span><b>STANDARD</b></div>
+              <div className="path-icon">↗</div>
+              <div><h3>产品与接口已经明确</h3><p>核对来源参数，选择对应配置，提交采购意向。</p><ul><li>产品级动态配置项</li><li>公司与交付信息</li><li>销售确认价格、库存与交期</li></ul></div>
+              <button className="primary-button" onClick={() => onNavigate("standard")}>开始标准选型 <span>→</span></button>
+            </article>
+            <article className="path-card custom" data-reveal style={{ "--reveal-delay": "100ms" } as React.CSSProperties}>
+              <div className="path-topline"><span>02</span><b>ENGINEERING</b></div>
+              <div className="path-icon">＋</div>
+              <div><h3>系统边界仍需要共同定义</h3><p>AI 帮助补全信息，销售与工程师完成技术和商务确认。</p><ul><li>边填写边评估完整度</li><li>实时参考估价区间</li><li>结构化摘要直接交接</li></ul></div>
+              <button className="dark-button" onClick={() => onNavigate("custom")}>进入联合评估 <span>→</span></button>
+            </article>
+          </div>
+        </section>
+
+        <section className="trust-boundary-section" id="support" data-reveal>
+          <div className="trust-boundary-copy"><span>AI, WITH CLEAR BOUNDARIES</span><h2>智能负责提效，<br />专业判断仍由人完成。</h2><p>AI 只基于已确认资料解释、检索和组织方案。兼容性、最终设计、正式价格和履约承诺由授权人员确认。</p><button onClick={() => onAskAi("请介绍你能为机器人元器件选型提供哪些帮助，以及哪些问题需要转给销售或工程师。")}>和 AI 选型助理聊聊 <b>↗</b></button></div>
+          <div className="trust-principles">
+            {[["01", "资料内回答", "产品事实附带 PPT 页码来源"], ["02", "不确定就说明", "不猜测参数、认证、库存和交期"], ["03", "上下文不丢失", "从选型到需求单保持同一份摘要"], ["04", "关键结论转人工", "工程与商务边界由授权人员确认"]].map(([number, title, detail]) => (
+              <div key={number}><span>{number}</span><p><b>{title}</b><small>{detail}</small></p></div>
+            ))}
+          </div>
         </section>
       </main>
     </>
@@ -1392,6 +1477,7 @@ export default function HomePage() {
 
   return (
     <div>
+      <MotionEffects />
       <Header onNavigate={navigate} onNavigateSection={navigateToSection} onOpenAssistant={() => openAssistant()} />
       <AiJourneyRibbon view={view} brief={brief} selected={selected} onOpenAssistant={() => openAssistant()} />
       {view === "home" && <Home onNavigate={navigate} onSelect={setSelected} brief={brief} onBriefChange={setBrief} onAskAi={openAssistant} />}
