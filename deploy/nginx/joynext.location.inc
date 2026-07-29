@@ -46,7 +46,7 @@ location ^~ /joynext/ {
     proxy_set_header X-Forwarded-Prefix /joynext;
 
     proxy_connect_timeout 10s;
-    proxy_send_timeout 60s;
-    proxy_read_timeout 60s;
+    proxy_send_timeout 90s;
+    proxy_read_timeout 90s;
     proxy_redirect off;
 }

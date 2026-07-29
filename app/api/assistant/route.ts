@@ -147,7 +147,7 @@ export async function POST(request: Request) {
   }
 
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 45_000);
+  const timeout = setTimeout(() => controller.abort(), 75_000);
   try {
     const providerResponse = await fetch(`${providerBaseUrl}/chat/completions`, {
       method: "POST",
@@ -158,7 +158,7 @@ export async function POST(request: Request) {
       body: JSON.stringify({
         model: providerModel,
         stream: false,
-        max_tokens: 1400,
+        max_tokens: 900,
         messages: [
           { role: "system", content: assistantSystemPrompt },
           { role: "system", content: contextMessage(body.context ?? {}) },
