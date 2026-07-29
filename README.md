@@ -17,6 +17,8 @@
 
 产品图片和演示参数来自项目提供的 `Joynext robotics product intro 20260729.pptx`。工程状态、价格与交期仅用于原型演示，最终信息应由 JOYNEXT 销售或工程师确认。
 
+完整产品说明见：[产品业务流程与功能说明](docs/product-business-flow-and-functional-spec.md)。
+
 ## 本地运行
 
 需要 Node.js `>=22.13.0`。
