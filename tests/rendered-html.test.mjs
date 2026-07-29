@@ -29,5 +29,9 @@ test("renders development preview metadata", async () => {
     response.headers.get("content-type") ?? "",
     /^text\/html\b/i,
   );
-  assert.match(await response.text(), developmentPreviewMeta);
+  const html = await response.text();
+  assert.match(html, developmentPreviewMeta);
+  assert.match(html, /选型 Copilot 持续在线/);
+  assert.match(html, /先说场景，AI 和你一起缩小选型范围/);
+  assert.match(html, /带着上下文继续配置/);
 });

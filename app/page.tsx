@@ -18,6 +18,12 @@ type Product = {
   description: string;
 };
 
+type DiscoveryBrief = {
+  scene: "AMR / AGV" | "人形机器人" | "协作机械臂" | "服务机器人";
+  goal: "导航与避障" | "姿态与平衡" | "视觉与三维感知" | "集中计算与实时控制";
+  stage: "概念设计" | "Demo / 样机" | "样机验证" | "小批量验证";
+};
+
 type StandardCustomer = {
   company: string;
   companyType: string;
@@ -104,6 +110,58 @@ const products: Product[] = [
     description: "面向动态机器人姿态、平衡与运动反馈的微型惯性测量模组。",
   },
 ];
+
+const discoveryGoals: DiscoveryBrief["goal"][] = [
+  "导航与避障",
+  "姿态与平衡",
+  "视觉与三维感知",
+  "集中计算与实时控制",
+];
+
+const discoveryScenes: DiscoveryBrief["scene"][] = ["AMR / AGV", "人形机器人", "协作机械臂", "服务机器人"];
+
+const productFit: Record<Product["id"], { scenes: DiscoveryBrief["scene"][]; goals: DiscoveryBrief["goal"][]; reason: string }> = {
+  controller: {
+    scenes: ["人形机器人", "协作机械臂", "AMR / AGV"],
+    goals: ["集中计算与实时控制", "导航与避障"],
+    reason: "适合需要集中算力、实时控制和多总线协同的机器人平台",
+  },
+  fisheye: {
+    scenes: ["AMR / AGV", "服务机器人"],
+    goals: ["导航与避障", "视觉与三维感知"],
+    reason: "超广角视野适合盲区覆盖、视觉 SLAM 与环境安全感知",
+  },
+  depth: {
+    scenes: ["AMR / AGV", "协作机械臂", "服务机器人"],
+    goals: ["视觉与三维感知", "导航与避障"],
+    reason: "深度、RGB 与 IMU 融合，适合空间测量、避障和三维重建",
+  },
+  imu: {
+    scenes: ["人形机器人", "AMR / AGV", "协作机械臂"],
+    goals: ["姿态与平衡", "导航与避障"],
+    reason: "提供姿态、平衡与动态反馈，是运动控制闭环的基础传感器",
+  },
+};
+
+function recommendProducts(brief: DiscoveryBrief) {
+  const goalBoost: Record<DiscoveryBrief["goal"], Partial<Record<Product["id"], number>>> = {
+    "导航与避障": { depth: 10, fisheye: 7, imu: 3, controller: 1 },
+    "姿态与平衡": { imu: 10, controller: 4, depth: 2 },
+    "视觉与三维感知": { depth: 10, fisheye: 7, controller: 2 },
+    "集中计算与实时控制": { controller: 10, imu: 2 },
+  };
+  return products
+    .map((product) => {
+      const fit = productFit[product.id];
+      const score = 45
+        + (fit.scenes.includes(brief.scene) ? 18 : 0)
+        + (fit.goals.includes(brief.goal) ? 22 : 0)
+        + (goalBoost[brief.goal][product.id] ?? 0)
+        + (brief.stage === "小批量验证" && product.id !== "controller" ? 4 : 0);
+      return { product, score: Math.min(98, score), reason: fit.reason };
+    })
+    .sort((a, b) => b.score - a.score);
+}
 
 const scenarios = [
   { icon: "◫", name: "AMR / AGV", note: "导航、定位与多传感器融合", image: withBasePath("/scenes/amr-warehouse.jpeg") },
@@ -243,8 +301,122 @@ function Progress({ step, custom = false }: { step: number; custom?: boolean }) 
   );
 }
 
-function Home({ onNavigate, onSelect }: { onNavigate: (v: View) => void; onSelect: (p: Product) => void }) {
+function AiJourneyRibbon({
+  view,
+  brief,
+  selected,
+}: {
+  view: View;
+  brief: DiscoveryBrief;
+  selected: Product;
+}) {
+  const activeStep = view === "home" ? 1 : view === "standard" ? 2 : 3;
+  const message = view === "home"
+    ? `正在围绕“${brief.scene} · ${brief.goal}”持续理解需求`
+    : view === "standard"
+      ? `已带入场景上下文，正在校验 ${selected.model} 的配置适配性`
+      : `已继承前序选型上下文，正在补全工程评估信息`;
+  return (
+    <section className="ai-journey-ribbon" aria-label="AI 协同选型进度">
+      <div className="ai-journey-status"><span>AI</span><p><b>选型 Copilot 持续在线</b><small>{message}</small></p></div>
+      <div className="ai-journey-steps">
+        {["理解场景", "推荐与校验", "形成可跟进需求"].map((item, index) => (
+          <span className={index + 1 <= activeStep ? "active" : ""} key={item}><i>{index + 1 < activeStep ? "✓" : index + 1}</i>{item}</span>
+        ))}
+      </div>
+      <em>资料内回答 · 风险自动转人工</em>
+    </section>
+  );
+}
+
+function AiDiscoveryWorkspace({
+  brief,
+  onBriefChange,
+  onNavigate,
+  onSelect,
+}: {
+  brief: DiscoveryBrief;
+  onBriefChange: (brief: DiscoveryBrief) => void;
+  onNavigate: (view: View) => void;
+  onSelect: (product: Product) => void;
+}) {
+  const recommendations = useMemo(() => recommendProducts(brief), [brief]);
+  const primary = recommendations[0];
+
+  const startConfiguration = (product: Product) => {
+    onSelect(product);
+    onNavigate("standard");
+  };
+
+  return (
+    <section className="ai-discovery-workspace" id="ai-discovery">
+      <div className="ai-discovery-heading">
+        <div><span className="ai-orb compact">AI</span><p><small>CONTEXTUAL PRODUCT COPILOT</small><b>先说场景，AI 和你一起缩小选型范围</b></p></div>
+        <span className="ai-live-state"><i /> 推荐随选择实时更新</span>
+      </div>
+      <div className="ai-discovery-grid">
+        <div className="ai-brief-builder">
+          <label>
+            <span>1 · 机器人场景</span>
+            <div className="choice-chips">
+              {discoveryScenes.map((scene) => (
+                <button className={brief.scene === scene ? "active" : ""} type="button" key={scene} onClick={() => onBriefChange({ ...brief, scene })}>{scene}</button>
+              ))}
+            </div>
+          </label>
+          <label>
+            <span>2 · 当前最想解决的问题</span>
+            <div className="choice-chips goal-chips">
+              {discoveryGoals.map((goal) => (
+                <button className={brief.goal === goal ? "active" : ""} type="button" key={goal} onClick={() => onBriefChange({ ...brief, goal })}>{goal}</button>
+              ))}
+            </div>
+          </label>
+          <label className="ai-stage-field">
+            <span>3 · 项目阶段</span>
+            <select value={brief.stage} onChange={(event) => onBriefChange({ ...brief, stage: event.target.value as DiscoveryBrief["stage"] })}>
+              <option>概念设计</option><option>Demo / 样机</option><option>样机验证</option><option>小批量验证</option>
+            </select>
+            <small>阶段会影响标准件优先级、工程介入方式和交期提示。</small>
+          </label>
+        </div>
+        <div className="ai-recommendation-result" aria-live="polite">
+          <div className="recommendation-topline"><span>首选建议 · {primary.score}% 场景匹配</span><b>基于已确认产品资料</b></div>
+          <div className="recommended-product">
+            <img src={primary.product.image} alt="" />
+            <div><small>{primary.product.model}</small><h3>{primary.product.name}</h3><p>{primary.reason}。</p></div>
+          </div>
+          <div className="ai-reasoning">
+            <span>为什么推荐</span>
+            <p>你的目标是“{brief.goal}”，处于{brief.stage}阶段。AI 优先考虑场景覆盖、现有接口能力与当前可交付状态。</p>
+          </div>
+          <button className="primary-button full" onClick={() => startConfiguration(primary.product)}>带着上下文继续配置 →</button>
+          <div className="alternative-products">
+            <span>也可比较</span>
+            {recommendations.slice(1, 3).map(({ product, score }) => (
+              <button key={product.id} onClick={() => startConfiguration(product)}><b>{product.model}</b><small>{score}% 匹配</small></button>
+            ))}
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function Home({
+  onNavigate,
+  onSelect,
+  brief,
+  onBriefChange,
+}: {
+  onNavigate: (v: View) => void;
+  onSelect: (p: Product) => void;
+  brief: DiscoveryBrief;
+  onBriefChange: (brief: DiscoveryBrief) => void;
+}) {
   const [query, setQuery] = useState("");
+  const recommendations = useMemo(() => recommendProducts(brief), [brief]);
+  const recommendedId = recommendations[0].product.id;
   const visible = useMemo(() => {
     if (!query.trim()) return products;
     const q = query.toLowerCase();
@@ -294,6 +466,8 @@ function Home({ onNavigate, onSelect }: { onNavigate: (v: View) => void; onSelec
       </section>
 
       <main>
+        <AiDiscoveryWorkspace brief={brief} onBriefChange={onBriefChange} onNavigate={onNavigate} onSelect={onSelect} />
+
         <section className="path-section" id="workflow">
           <div className="section-heading center">
             <span>START HERE</span>
@@ -340,9 +514,15 @@ function Home({ onNavigate, onSelect }: { onNavigate: (v: View) => void; onSelec
           </div>
           <div className="scenario-grid">
             {scenarios.map((scenario) => (
-              <button className="scenario-card" key={scenario.name} onClick={() => onNavigate("standard")}>
+              <button className="scenario-card" key={scenario.name} onClick={() => {
+                const scene = scenario.name === "机械臂" ? "协作机械臂" : scenario.name as DiscoveryBrief["scene"];
+                const nextBrief = { ...brief, scene };
+                onBriefChange(nextBrief);
+                onSelect(recommendProducts(nextBrief)[0].product);
+                onNavigate("standard");
+              }}>
                 <img src={scenario.image} alt="" />
-                <div><span>{scenario.icon}</span><h3>{scenario.name}</h3><p>{scenario.note}</p><b>进入场景 →</b></div>
+                <div><span>{scenario.icon}</span><h3>{scenario.name}</h3><p>{scenario.note}</p><b>AI 已准备场景建议 →</b></div>
               </button>
             ))}
           </div>
@@ -355,8 +535,8 @@ function Home({ onNavigate, onSelect }: { onNavigate: (v: View) => void; onSelec
           </div>
           <div className="product-grid">
             {visible.map((product) => (
-              <article className="product-card" key={product.id}>
-                <div className="product-image"><span>{product.kind}</span><img src={product.image} alt={product.name} /></div>
+              <article className={product.id === recommendedId ? "product-card ai-recommended" : "product-card"} key={product.id}>
+                <div className="product-image"><span>{product.kind}</span>{product.id === recommendedId && <b className="ai-match-badge">AI 首选 · {recommendations[0].score}%</b>}<img src={product.image} alt={product.name} /></div>
                 <div className="product-body">
                   <small>{product.model}</small>
                   <h3>{product.name}</h3>
@@ -370,20 +550,28 @@ function Home({ onNavigate, onSelect }: { onNavigate: (v: View) => void; onSelec
         </section>
 
         <section className="ai-strip" id="support">
-          <div><span className="ai-orb">AI</span><div><small>AI 参数助手</small><h2>解释参数，也知道何时需要工程师确认</h2><p>基于已提供资料生成解释；系统级兼容、安全和最终设计决策会转交工程师。</p></div></div>
-          <button className="light-button" onClick={() => onNavigate("standard")}>体验 AI 辅助选型 ✦</button>
+          <div><span className="ai-orb">AI</span><div><small>贯穿式 AI 协同</small><h2>每一步都保留上下文，不再重复提问</h2><p>场景、目标和项目阶段会持续带入产品推荐、参数解释、配置校验、需求补全和销售摘要；系统级风险仍由工程师确认。</p></div></div>
+          <div className="ai-capability-list"><span>场景导购</span><span>配置校验</span><span>需求补全</span><span>线索摘要</span></div>
         </section>
       </main>
     </>
   );
 }
 
-function ProductList({ selected, onSelect }: { selected: Product; onSelect: (p: Product) => void }) {
+function ProductList({
+  selected,
+  onSelect,
+  recommendedId,
+}: {
+  selected: Product;
+  onSelect: (p: Product) => void;
+  recommendedId: string;
+}) {
   return (
     <div className="selection-grid">
       {products.map((product) => (
         <button className={product.id === selected.id ? "select-card selected" : "select-card"} onClick={() => onSelect(product)} key={product.id}>
-          <div className="select-image"><img src={product.image} alt="" /><span>{product.kind}</span></div>
+          <div className="select-image"><img src={product.image} alt="" /><span>{product.kind}</span>{product.id === recommendedId && <b className="ai-select-match">AI 首选</b>}</div>
           <div><small>{product.model}</small><h3>{product.name}</h3><p>{product.description}</p></div>
           <div className="select-bottom"><strong>{product.price}</strong><span>{product.lead}</span></div>
         </button>
@@ -400,6 +588,8 @@ function StandardFlow({
   onComplete,
   onLeadCreated,
   onViewOperations,
+  brief,
+  onBriefChange,
 }: {
   selected: Product;
   onSelect: (p: Product) => void;
@@ -408,6 +598,8 @@ function StandardFlow({
   onComplete: () => void;
   onLeadCreated: (lead: LeadRecord) => void;
   onViewOperations: () => void;
+  brief: DiscoveryBrief;
+  onBriefChange: (brief: DiscoveryBrief) => void;
 }) {
   const [step, setStep] = useState(1);
   const [qty, setQty] = useState(1);
@@ -430,6 +622,29 @@ function StandardFlow({
   const customerComplete = [customer.company, customer.contact, customer.contactDetail, customer.country, customer.city, customer.address]
     .every((value) => value.trim().length > 0);
   const customerLocation = `${customer.country} · ${customer.city}`;
+  const recommendations = useMemo(() => recommendProducts(brief), [brief]);
+  const recommended = recommendations[0];
+  const selectedMatch = recommendations.find((item) => item.product.id === selected.id) ?? recommendations[0];
+  const configurationSignals = [
+    {
+      label: "场景适配",
+      status: `${selectedMatch.score}%`,
+      tone: selectedMatch.score >= 85 ? "good" : "attention",
+      detail: `${selected.model} 与“${brief.scene} · ${brief.goal}”的资料匹配度`,
+    },
+    {
+      label: "配置风险",
+      status: engineering ? "需工程确认" : protocol === "EtherCAT" ? "需核对接口" : "资料内可配置",
+      tone: engineering || protocol === "EtherCAT" ? "attention" : "good",
+      detail: engineering ? "功耗、散热、安装和实时总线组合需要联合评审" : `${protocol} 选择已纳入订单摘要`,
+    },
+    {
+      label: "商务动作",
+      status: qty > 10 ? "销售介入" : "可自助提交",
+      tone: qty > 10 ? "attention" : "good",
+      detail: qty > 10 ? "批量需求将自动确认阶梯价格、库存和排期" : "补全客户与地址后即可进入订单队列",
+    },
+  ];
 
   function submitStandardOrder() {
     if (!customerComplete || engineering || orderId) return;
@@ -482,7 +697,17 @@ function StandardFlow({
             <h1>选择一个标准产品</h1>
             <p>所有展示参数均标注状态；工程样件在下单前必须完成技术确认。</p>
           </div>
-          <ProductList selected={selected} onSelect={onSelect} />
+          <div className="ai-selection-guide">
+            <div className="ai-guide-copy"><span>AI</span><p><small>已继承首页场景</small><b>{brief.scene} · {brief.goal}</b><em>{brief.stage}</em></p></div>
+            <div className="ai-guide-reason"><span>当前首选</span><b>{recommended.product.model} · {recommended.product.name}</b><p>{recommended.reason}。</p></div>
+            <div className="ai-guide-refine">
+              <span>快速调整目标</span>
+              <select value={brief.goal} onChange={(event) => onBriefChange({ ...brief, goal: event.target.value as DiscoveryBrief["goal"] })}>
+                {discoveryGoals.map((goal) => <option key={goal}>{goal}</option>)}
+              </select>
+            </div>
+          </div>
+          <ProductList selected={selected} onSelect={onSelect} recommendedId={recommended.product.id} />
           <div className="sticky-actions">
             <div><span>当前选择</span><strong>{selected.model} · {selected.name}</strong></div>
             <button className="primary-button" onClick={() => setStep(2)}>确认并配置 →</button>
@@ -511,6 +736,15 @@ function StandardFlow({
                 <label><span>使用环境 *</span><select><option>室内常温</option><option>仓储 / 轻工业</option><option>户外 / 高防护</option></select></label>
                 <label><span>计划交付</span><select><option>尽快</option><option>1 个月内</option><option>3 个月内</option></select></label>
               </div>
+            </div>
+            <div className="ai-configuration-companion" aria-live="polite">
+              <div className="ai-companion-heading"><span>AI</span><p><small>CONTEXT-AWARE CHECK</small><b>配置变化已实时纳入评估</b></p><em>持续校验中</em></div>
+              <div className="ai-signal-grid">
+                {configurationSignals.map((signal) => (
+                  <div className={signal.tone} key={signal.label}><span>{signal.label}</span><strong>{signal.status}</strong><p>{signal.detail}</p></div>
+                ))}
+              </div>
+              <p className="ai-handoff-note"><b>下一步建议：</b>{engineering ? "转入定制需求，AI 会保留当前产品、场景和风险点，工程师无需从头询问。" : customerComplete ? "信息已完整，可以提交；AI 将自动生成客户标签与销售跟进摘要。" : "继续补全公司与收货信息，缺失项不会被猜测或自动填写。"}</p>
             </div>
             <div className="panel customer-panel">
               <div className="panel-heading">
@@ -622,21 +856,42 @@ function CustomFlow({
   onComplete,
   onLeadCreated,
   onViewOperations,
+  brief,
 }: {
   onHome: () => void;
   onComplete: () => void;
   onLeadCreated: (lead: LeadRecord) => void;
   onViewOperations: () => void;
+  brief: DiscoveryBrief;
 }) {
   const [submitted, setSubmitted] = useState(false);
   const [priority, setPriority] = useState("常规");
   const [createdLead, setCreatedLead] = useState<LeadRecord | null>(null);
   const [form, setForm] = useState({
-    project: "", company: "", contact: "", phone: "", country: "中国", scene: "人形机器人",
-    volume: "", stage: "样机验证", target: "3 个月内", need: "",
+    project: "", company: "", contact: "", phone: "", country: "中国", scene: brief.scene,
+    volume: "", stage: brief.stage === "概念设计" ? "概念设计" : brief.stage, target: "3 个月内", need: "",
   });
-  const update = (key: keyof typeof form, value: string) => setForm({ ...form, [key]: value });
+  const update = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
   const priceEstimate = estimateCustomPrice(form.scene, form.stage, priority, form.need);
+  const requirementChecks = [
+    { label: "任务目标", done: form.need.trim().length >= 18 },
+    { label: "接口 / 平台", done: /接口|EtherCAT|CAN|USB|RS485|平台|控制器/i.test(form.need) },
+    { label: "环境 / 空间", done: /环境|温度|防护|安装|尺寸|空间|户外|室内/i.test(form.need) },
+    { label: "数量 / 时间", done: Boolean(form.volume.trim()) && form.target !== "待确认" },
+  ];
+  const requirementCompleteness = Math.round(requirementChecks.filter((item) => item.done).length / requirementChecks.length * 100);
+  const requirementFragments = form.scene === "AMR / AGV"
+    ? ["补充导航速度、避障距离和视场要求", "说明已有控制器及传感器接口", "补充仓库光照、粉尘和温度范围"]
+    : form.scene === "人形机器人"
+      ? ["补充控制周期、关节数量和算力需求", "说明整机功耗、散热与安装空间", "补充姿态精度、动态范围和安全约束"]
+      : ["补充任务节拍、精度和工作距离", "说明已有平台、通信接口和安装方式", "补充环境、防护等级与认证要求"];
+
+  const addRequirementFragment = (fragment: string) => {
+    setForm((current) => ({
+      ...current,
+      need: `${current.need}${current.need.trim() ? "；" : ""}${fragment}：`,
+    }));
+  };
 
   if (submitted) {
     return (
@@ -721,7 +976,7 @@ function CustomFlow({
       <div className="flow-bar"><button className="back-button" onClick={onHome}>← 返回产品中心</button><Progress step={2} custom /><span className="service-badge"><i /> 销售在线</span></div>
       <section className="custom-layout">
         <div className="custom-main">
-          <div className="flow-title"><span>CUSTOM SOLUTION PATH</span><h1>提交定制需求</h1><p>用业务语言描述任务即可。系统会整理成销售与技术人员可直接处理的结构化摘要。</p></div>
+          <div className="flow-title"><span>CUSTOM SOLUTION PATH</span><h1>提交定制需求</h1><p>已带入“{brief.scene} · {brief.goal}”上下文。用业务语言描述任务即可，AI 会边填写边补全工程评估所需信息。</p></div>
           <form className="custom-form" onSubmit={submit}>
             <div className="form-section">
               <div className="form-section-title"><span>01</span><div><h2>项目与场景</h2><p>帮助我们判断对应的销售与工程团队。</p></div></div>
@@ -729,6 +984,17 @@ function CustomFlow({
                 <label><span>项目名称 *</span><input required value={form.project} onChange={(e) => update("project", e.target.value)} placeholder="例如：仓储 AMR 视觉升级" /></label>
                 <label><span>机器人场景 *</span><select value={form.scene} onChange={(e) => update("scene", e.target.value)}><option>人形机器人</option><option>AMR / AGV</option><option>协作机械臂</option><option>服务机器人</option><option>其他</option></select></label>
                 <label className="full-field"><span>需求描述 *</span><textarea required value={form.need} onChange={(e) => update("need", e.target.value)} placeholder="请描述任务目标、已有平台、关键指标、接口、安装空间、环境约束和期望交付时间…" /></label>
+              </div>
+              <div className="ai-requirement-coach" aria-live="polite">
+                <div className="requirement-score"><span>AI</span><p><small>需求可评估度</small><strong>{requirementCompleteness}%</strong></p><i><b style={{ width: `${requirementCompleteness}%` }} /></i></div>
+                <div className="requirement-checks">
+                  {requirementChecks.map((item) => <span className={item.done ? "done" : ""} key={item.label}>{item.done ? "✓" : "+"} {item.label}</span>)}
+                </div>
+                <div className="requirement-prompts">
+                  <small>点击补充建议，直接续写到需求描述</small>
+                  <div>{requirementFragments.map((fragment) => <button type="button" key={fragment} onClick={() => addRequirementFragment(fragment)}>{fragment}</button>)}</div>
+                </div>
+                <p><b>AI 当前理解：</b>{form.need.trim() ? `${form.scene}项目，重点围绕${brief.goal}；已识别 ${requirementChecks.filter((item) => item.done).map((item) => item.label).join("、") || "基础场景"}，未填写内容会保留为待销售澄清。` : "先描述任务目标，AI 会实时标出工程评估仍缺少的信息，不会猜测关键参数。"}</p>
               </div>
             </div>
             <div className="live-estimate-card" aria-live="polite">
@@ -766,7 +1032,7 @@ function CustomFlow({
           </form>
         </div>
         <aside className="custom-aside">
-          <div className="sales-card"><span className="live-dot" /><small>SALES ONLINE</small><h3>提交后立即进入销售队列</h3><p>系统会根据场景、年用量、项目阶段和技术复杂度评分分流。</p><div className="avatar-row"><i>销</i><i>技</i><span>销售 + 工程师联合响应</span></div></div>
+          <div className="sales-card"><span className="live-dot" /><small>AI + SALES ONLINE</small><h3>上下文会随需求一起交接</h3><p>场景、目标、推荐产品、风险点和估价依据会形成同一份摘要，销售与工程师不再重复询问。</p><div className="avatar-row"><i>AI</i><i>销</i><i>技</i><span>智能整理 + 人工确认</span></div></div>
           <div className="next-card"><h3>接下来会发生什么</h3>{[["1", "需求入队", "即时生成结构化摘要"], ["2", "销售首联", "预计 2 小时内"], ["3", "工程评估", "确认接口、风险与边界"], ["4", "单据生成", "2 个工作日内给出报价与工期"]].map(([n, h, p]) => <div key={n}><span>{n}</span><p><b>{h}</b><small>{p}</small></p></div>)}</div>
           <div className="trust-card"><h3>资料边界</h3><p>AI 只整理和解释已提供资料。系统兼容、安全、法规与最终设计结论必须由工程师确认。</p></div>
         </aside>
@@ -937,6 +1203,11 @@ function FloatingOrderButton({ onClick }: { onClick: () => void }) {
 export default function HomePage() {
   const [view, setView] = useState<View>("home");
   const [selected, setSelected] = useState(products[1]);
+  const [brief, setBrief] = useState<DiscoveryBrief>({
+    scene: "AMR / AGV",
+    goal: "导航与避障",
+    stage: "Demo / 样机",
+  });
   const [leads, setLeads] = useState<LeadRecord[]>(seedLeads);
   const [leadStoreReady, setLeadStoreReady] = useState(false);
 
@@ -989,9 +1260,10 @@ export default function HomePage() {
   return (
     <div>
       <Header onNavigate={navigate} onNavigateSection={navigateToSection} />
-      {view === "home" && <Home onNavigate={navigate} onSelect={setSelected} />}
-      {view === "standard" && <StandardFlow selected={selected} onSelect={setSelected} onHome={() => navigate("home")} onCustom={() => navigate("custom")} onComplete={() => navigate("home")} onLeadCreated={addLead} onViewOperations={() => window.location.assign(withBasePath("/admin"))} />}
-      {view === "custom" && <CustomFlow onHome={() => navigate("home")} onComplete={() => navigate("home")} onLeadCreated={addLead} onViewOperations={() => window.location.assign(withBasePath("/admin"))} />}
+      <AiJourneyRibbon view={view} brief={brief} selected={selected} />
+      {view === "home" && <Home onNavigate={navigate} onSelect={setSelected} brief={brief} onBriefChange={setBrief} />}
+      {view === "standard" && <StandardFlow selected={selected} onSelect={setSelected} onHome={() => navigate("home")} onCustom={() => navigate("custom")} onComplete={() => navigate("home")} onLeadCreated={addLead} onViewOperations={() => window.location.assign(withBasePath("/admin"))} brief={brief} onBriefChange={setBrief} />}
+      {view === "custom" && <CustomFlow onHome={() => navigate("home")} onComplete={() => navigate("home")} onLeadCreated={addLead} onViewOperations={() => window.location.assign(withBasePath("/admin"))} brief={brief} />}
       {view === "home" && <Footer />}
       {view === "home" && <FloatingOrderButton onClick={() => navigateToSection("standard-order")} />}
     </div>
