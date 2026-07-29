@@ -131,7 +131,11 @@ jobs:
               "https://www.atlasfish.work/joynext/assets/brand/joynext-logo-dark.png" >/dev/null &&
               curl --fail --silent --show-error \
               "https://www.atlasfish.work/joynext/products/domain-controller.png" >/dev/null; then
-              exit 0
+              if curl --fail --silent --show-error \
+                "https://www.atlasfish.work/joynext/api/assistant" |
+                grep --quiet '"status":"ready"'; then
+                exit 0
+              fi
             fi
             sleep 3
           done

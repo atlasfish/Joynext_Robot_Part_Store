@@ -6,6 +6,7 @@ app_name="joynext-robotics"
 network="atlasfish_proxy"
 deploy_root="/root/joynext-deploy"
 state_file="${deploy_root}/active-slot"
+ai_env_file="${deploy_root}/ai.env"
 nginx_container="nginx"
 nginx_default_conf="/root/nginx_conf/nginx/conf.d/default.conf"
 nginx_location_conf="/root/nginx_conf/nginx/conf.d/joynext.location.inc"
@@ -44,10 +45,18 @@ fi
 echo "Pulling ${image}"
 docker pull "${image}"
 docker rm -f "${next_container}" >/dev/null 2>&1 || true
+runtime_env_args=()
+if [[ -f "${ai_env_file}" ]]; then
+  chmod 600 "${ai_env_file}"
+  runtime_env_args=(--env-file "${ai_env_file}")
+else
+  echo "Warning: ${ai_env_file} is missing; AI assistant will report that it is not configured." >&2
+fi
 docker run -d \
   --name "${next_container}" \
   --network "${network}" \
   --restart unless-stopped \
+  "${runtime_env_args[@]}" \
   --label "com.joynext.application=${app_name}" \
   --label "com.joynext.deployment-slot=${next_slot}" \
   "${image}" >/dev/null
