@@ -13,6 +13,7 @@ type AssistantContext = {
   view?: string;
   selectedProduct?: string;
   configuration?: Record<string, string>;
+  language?: string;
 };
 
 const providerBaseUrl = (process.env.AI_BASE_URL ?? "https://api.sudocode.chat/v1").replace(/\/$/, "");
@@ -62,6 +63,7 @@ function contextMessage(context: AssistantContext) {
     `项目阶段：${context.stage ?? "未选择"}`,
     `当前产品：${context.selectedProduct ?? "未选择"}`,
     `当前配置：${configuration}`,
+    `回答语言：${context.language ?? "跟随客户提问语言"}。必须使用该语言回答。`,
   ].join("\n");
 }
 
@@ -113,37 +115,39 @@ export function GET() {
 }
 
 export async function POST(request: Request) {
+  const english = request.headers.get("x-client-language") === "en";
+  const reply = (zh: string, en: string) => english ? en : zh;
   if (rateLimited(getClientId(request))) {
-    return Response.json({ error: "请求较频繁，请稍后再试或联系销售。" }, { status: 429 });
+    return Response.json({ error: reply("请求较频繁，请稍后再试或联系销售。", "Too many requests. Please try again later or contact sales.") }, { status: 429 });
   }
 
   const apiKey = process.env.AI_API_KEY;
   if (!apiKey) {
     return Response.json({
-      error: "AI 助理尚未配置运行时密钥，请联系演示管理员。",
+      error: reply("AI 助理尚未配置运行时密钥，请联系演示管理员。", "The AI advisor is not configured. Please contact the demo administrator."),
       code: "AI_NOT_CONFIGURED",
     }, { status: 503 });
   }
 
   const contentLength = Number(request.headers.get("content-length") ?? "0");
   if (contentLength > 64_000) {
-    return Response.json({ error: "对话内容过长，请精简后重试。" }, { status: 413 });
+    return Response.json({ error: reply("对话内容过长，请精简后重试。", "The conversation is too long. Please shorten it and try again.") }, { status: 413 });
   }
 
   let body: { messages?: unknown; context?: AssistantContext };
   try {
     body = await request.json();
   } catch {
-    return Response.json({ error: "请求格式无效。" }, { status: 400 });
+    return Response.json({ error: reply("请求格式无效。", "Invalid request format.") }, { status: 400 });
   }
 
   const messages = cleanMessages(body.messages);
   if (!messages.length || messages[messages.length - 1].role !== "user") {
-    return Response.json({ error: "请先输入需要了解的产品或机器人任务。" }, { status: 400 });
+    return Response.json({ error: reply("请先输入需要了解的产品或机器人任务。", "Enter a product or robot application first.") }, { status: 400 });
   }
   const totalCharacters = messages.reduce((total, message) => total + message.content.length, 0);
   if (totalCharacters > 16_000) {
-    return Response.json({ error: "对话上下文过长，请开始一个新问题。" }, { status: 413 });
+    return Response.json({ error: reply("对话上下文过长，请开始一个新问题。", "The conversation context is too long. Please start a new question.") }, { status: 413 });
   }
 
   const controller = new AbortController();
@@ -177,14 +181,14 @@ export async function POST(request: Request) {
       console.error("AI provider request failed", providerResponse.status);
       return Response.json({
         error: providerResponse.status === 401 || providerResponse.status === 403
-          ? "AI 服务认证失败，请联系演示管理员。"
-          : "AI 服务暂时不可用，请稍后重试或直接联系销售。",
+          ? reply("AI 服务认证失败，请联系演示管理员。", "AI service authentication failed. Please contact the demo administrator.")
+          : reply("AI 服务暂时不可用，请稍后重试或直接联系销售。", "The AI service is temporarily unavailable. Please try again or contact sales."),
       }, { status: 502 });
     }
 
     const answer = extractText(responseBody?.choices?.[0]?.message?.content);
     if (!answer) {
-      return Response.json({ error: "AI 服务未返回有效内容，请换一种方式描述需求。" }, { status: 502 });
+      return Response.json({ error: reply("AI 服务未返回有效内容，请换一种方式描述需求。", "The AI service returned no usable answer. Please rephrase your requirement.") }, { status: 502 });
     }
 
     const latestQuestion = messages[messages.length - 1].content;
@@ -192,7 +196,10 @@ export async function POST(request: Request) {
       answer,
       model: providerModel,
       products: matchingProducts(`${latestQuestion}\n${answer}`),
-      boundary: "AI 建议基于已确认演示资料，最终选型、价格、库存与交期需由 JOYNEXT 销售或工程师确认。",
+      boundary: reply(
+        "AI 建议基于已确认产品资料，最终选型、价格、库存与交期需由 JOYNEXT 销售或工程师确认。",
+        "AI guidance is based on verified product data. Final selection, price, stock and lead time require confirmation by JOYNEXT sales or engineering.",
+      ),
     });
   } catch (error) {
     console.error(
@@ -201,8 +208,8 @@ export async function POST(request: Request) {
     );
     return Response.json({
       error: error instanceof Error && error.name === "AbortError"
-        ? "AI 响应超时，请稍后重试。"
-        : "AI 服务连接失败，请稍后重试或联系销售。",
+        ? reply("AI 响应超时，请稍后重试。", "The AI response timed out. Please try again.")
+        : reply("AI 服务连接失败，请稍后重试或联系销售。", "Could not connect to the AI service. Please try again or contact sales."),
     }, { status: 502 });
   } finally {
     clearTimeout(timeout);

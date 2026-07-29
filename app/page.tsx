@@ -1,7 +1,8 @@
 "use client";
 
-import { FormEvent, useEffect, useMemo, useState } from "react";
+import { createContext, FormEvent, useContext, useEffect, useMemo, useState } from "react";
 import { productCatalog, type CatalogProduct } from "@/lib/product-catalog";
+import { localizeValue, stripRequiredMark, type ClientLocale } from "@/lib/client-i18n";
 
 type View = "home" | "standard" | "custom";
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
@@ -75,6 +76,26 @@ type AssistantPrompt = {
   id: number;
   text: string;
 };
+
+type LocaleContextValue = {
+  locale: ClientLocale;
+  setLocale: (locale: ClientLocale) => void;
+};
+
+const LocaleContext = createContext<LocaleContextValue>({
+  locale: "zh",
+  setLocale: () => undefined,
+});
+
+function useClientCopy() {
+  const { locale, setLocale } = useContext(LocaleContext);
+  return {
+    locale,
+    setLocale,
+    c: (zh: string, en: string) => locale === "en" ? en : zh,
+    v: (value: string) => localizeValue(locale, value),
+  };
+}
 
 const products: Product[] = productCatalog.map((product) => ({
   ...product,
@@ -162,7 +183,7 @@ const seedLeads: LeadRecord[] = [
   },
 ];
 
-function estimateCustomPrice(scene: string, stage: string, priority: string, need: string) {
+function estimateCustomPrice(scene: string, stage: string, priority: string, need: string, locale: ClientLocale = "zh") {
   const sceneBase: Record<string, number> = {
     "人形机器人": 160000,
     "AMR / AGV": 90000,
@@ -185,23 +206,32 @@ function estimateCustomPrice(scene: string, stage: string, priority: string, nee
   const roundToTenThousand = (value: number) => Math.max(30000, Math.round(value / 10000) * 10000);
   const low = roundToTenThousand(midpoint * 0.72);
   const high = roundToTenThousand(midpoint * 1.38);
-  const format = (value: number) => `¥${value / 10000}万`;
-  const reasons = [
-    `${scene}方案与样机适配`,
-    `${stage}阶段的工程投入`,
-    priority === "紧急样机" ? "加急样机资源协调" : priority === "量产项目" ? "量产导入与验证准备" : "常规交付节奏",
-  ];
-  if (complexityHits) reasons.push(`${complexityHits} 项复杂技术约束`);
+  const format = (value: number) => locale === "en"
+    ? `RMB ${(value / 1000).toLocaleString()}k`
+    : `¥${value / 10000}万`;
+  const reasons = locale === "en"
+    ? [
+      `${localizeValue(locale, scene)} solution and prototype adaptation`,
+      `Engineering input for the ${localizeValue(locale, stage)} stage`,
+      priority === "紧急样机" ? "Urgent prototype resource coordination" : priority === "量产项目" ? "Production-introduction and validation preparation" : "Standard delivery planning",
+    ]
+    : [
+      `${scene}方案与样机适配`,
+      `${stage}阶段的工程投入`,
+      priority === "紧急样机" ? "加急样机资源协调" : priority === "量产项目" ? "量产导入与验证准备" : "常规交付节奏",
+    ];
+  if (complexityHits) reasons.push(locale === "en" ? `${complexityHits} complex technical constraints` : `${complexityHits} 项复杂技术约束`);
   return { low, high, label: `${format(low)} – ${format(high)}`, reasons };
 }
 
 function Logo({ inverse = false, onClick }: { inverse?: boolean; onClick?: () => void }) {
+  const { c } = useClientCopy();
   return (
-    <button className="brand" onClick={onClick ?? (() => window.scrollTo({ top: 0, behavior: "smooth" }))} aria-label="返回首页">
+    <button className="brand" onClick={onClick ?? (() => window.scrollTo({ top: 0, behavior: "smooth" }))} aria-label={c("返回首页", "Back to homepage")}>
       <img
         className="brand-logo"
         src={inverse ? withBasePath("/assets/brand/joynext-logo-light.png") : withBasePath("/assets/brand/joynext-logo-dark.png")}
-        alt="JOYNEXT 均联智行"
+        alt="JOYNEXT"
       />
     </button>
   );
@@ -277,13 +307,18 @@ function AiAssistantDrawer({
   promptRequest: AssistantPrompt | null;
   onSelectProduct: (product: Product) => void;
 }) {
+  const { locale, c, v } = useClientCopy();
   const [input, setInput] = useState("");
   const [dismissedPromptId, setDismissedPromptId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const assistantIntro = c(
+    "您好，我是 JOYNEXT 选型助理。请告诉我机器人类型、工作距离、接口、使用环境、项目阶段和预计数量，我会依据已确认资料帮您筛选产品。",
+    "Hello, I’m the JOYNEXT product advisor. Tell me your robot type, working range, interface, environment, project stage and expected quantity, and I’ll shortlist products using verified information.",
+  );
   const [messages, setMessages] = useState<AssistantMessage[]>([{
     role: "assistant",
-    content: "你好，我是 JOYNEXT AI 选型助理。你可以描述机器人类型、任务、工作距离、接口、环境和项目阶段，我会基于已确认的产品资料推荐候选产品或组合方案。",
+    content: "",
   }]);
 
   const composerValue = promptRequest && dismissedPromptId !== promptRequest.id ? promptRequest.text : input;
@@ -291,7 +326,10 @@ function AiAssistantDrawer({
   async function sendMessage(question?: string) {
     const content = (question ?? composerValue).trim();
     if (!content || loading) return;
-    const nextMessages: AssistantMessage[] = [...messages, { role: "user", content }];
+    const nextMessages: AssistantMessage[] = [
+      ...messages.map((message) => message.role === "assistant" && !message.content ? { ...message, content: assistantIntro } : message),
+      { role: "user", content },
+    ];
     setMessages(nextMessages);
     setInput("");
     setDismissedPromptId(promptRequest?.id ?? null);
@@ -300,7 +338,7 @@ function AiAssistantDrawer({
     try {
       const response = await fetch(withBasePath("/api/assistant"), {
         method: "POST",
-        headers: { "content-type": "application/json" },
+        headers: { "content-type": "application/json", "x-client-language": locale },
         body: JSON.stringify({
           messages: nextMessages.map(({ role, content: messageContent }) => ({ role, content: messageContent })),
           context: {
@@ -309,6 +347,7 @@ function AiAssistantDrawer({
             stage: brief.stage,
             view,
             selectedProduct: `${selected.model} · ${selected.name}`,
+            language: locale === "en" ? "English" : "Simplified Chinese",
           },
         }),
       });
@@ -318,7 +357,7 @@ function AiAssistantDrawer({
         products?: AssistantMessage["products"];
         boundary?: string;
       };
-      if (!response.ok || !data.answer) throw new Error(data.error || "AI 服务暂时不可用。");
+      if (!response.ok || !data.answer) throw new Error(data.error || c("AI 服务暂时不可用。", "The AI service is temporarily unavailable."));
       setMessages((current) => [...current, {
         role: "assistant",
         content: data.answer!,
@@ -326,38 +365,45 @@ function AiAssistantDrawer({
         boundary: data.boundary,
       }]);
     } catch (requestError) {
-      setError(requestError instanceof Error ? requestError.message : "AI 服务连接失败，请稍后重试。");
+      setError(requestError instanceof Error ? requestError.message : c("AI 服务连接失败，请稍后重试。", "Could not connect to the AI service. Please try again."));
     } finally {
       setLoading(false);
     }
   }
 
-  const quickPrompts = [
-    "仓储 AMR 需要 0.3–4 米避障和 USB 接口，推荐什么？",
-    "对比三款 DPC 深度相机的工作距离和接口",
-    "nRB-H1 能接入哪些传感器？哪些参数仍需工程确认？",
-    "给人形机器人提供一套感知、姿态与集中控制组合方案",
-  ];
+  const quickPrompts = locale === "en"
+    ? [
+      "Which product suits a warehouse AMR needing 0.3–4 m obstacle detection and USB?",
+      "Compare the working range and interfaces of the three DPC depth cameras.",
+      "Which sensors can nRB-H1 connect to, and what still needs engineering confirmation?",
+      "Suggest a perception, attitude and central-control combination for a humanoid robot.",
+    ]
+    : [
+      "仓储 AMR 需要 0.3–4 米避障和 USB 接口，推荐什么？",
+      "对比三款 DPC 深度相机的工作距离和接口",
+      "nRB-H1 能接入哪些传感器？哪些参数仍需工程确认？",
+      "给人形机器人提供一套感知、姿态与集中控制组合方案",
+    ];
 
   return (
     <div className={open ? "ai-assistant-layer open" : "ai-assistant-layer"} aria-hidden={!open}>
-      <button className="ai-assistant-backdrop" aria-label="关闭 AI 助理" onClick={onClose} />
-      <aside className="ai-assistant-drawer" aria-label="JOYNEXT AI 选型助理">
+      <button className="ai-assistant-backdrop" aria-label={c("关闭选型助理", "Close product advisor")} onClick={onClose} />
+      <aside className="ai-assistant-drawer" aria-label={c("JOYNEXT AI 选型助理", "JOYNEXT AI Product Advisor")}>
         <header>
-          <div><span>AI</span><p><small>REAL PRODUCT COPILOT</small><b>JOYNEXT AI 选型助理</b></p></div>
-          <button onClick={onClose} aria-label="关闭">×</button>
+          <div><span>AI</span><p><small>PRODUCT ADVISOR</small><b>{c("JOYNEXT AI 选型助理", "JOYNEXT AI Product Advisor")}</b></p></div>
+          <button onClick={onClose} aria-label={c("关闭", "Close")}>×</button>
         </header>
         <div className="assistant-context">
-          <span><b>场景</b>{brief.scene}</span>
-          <span><b>目标</b>{brief.goal}</span>
-          <span><b>阶段</b>{brief.stage}</span>
+          <span><b>{c("场景", "Robot")}</b>{v(brief.scene)}</span>
+          <span><b>{c("目标", "Task")}</b>{v(brief.goal)}</span>
+          <span><b>{c("阶段", "Stage")}</b>{v(brief.stage)}</span>
         </div>
         <div className="assistant-messages" aria-live="polite">
           {messages.map((message, index) => (
             <article className={`assistant-message ${message.role}`} key={`${message.role}-${index}`}>
-              <span>{message.role === "assistant" ? "AI" : "你"}</span>
+              <span>{message.role === "assistant" ? "AI" : c("您", "You")}</span>
               <div>
-                <p>{message.content}</p>
+                <p>{message.content || assistantIntro}</p>
                 {message.products?.length ? (
                   <div className="assistant-product-results">
                     {message.products.map((result) => {
@@ -365,7 +411,7 @@ function AiAssistantDrawer({
                       return (
                         <button key={result.id} onClick={() => product && onSelectProduct(product)}>
                           <img src={withBasePath(result.image)} alt="" />
-                          <span><small>{result.model} · {result.status}</small><b>{result.name}</b><em>{result.verified.slice(0, 2).join(" · ")}</em></span>
+                          <span><small>{result.model} · {v(result.status)}</small><b>{v(result.name)}</b><em>{result.verified.slice(0, 2).map(v).join(" · ")}</em></span>
                         </button>
                       );
                     })}
@@ -375,18 +421,18 @@ function AiAssistantDrawer({
               </div>
             </article>
           ))}
-          {loading && <article className="assistant-message assistant thinking"><span>AI</span><div><p>正在检索产品资料并整理方案<span className="thinking-dots">…</span></p></div></article>}
+          {loading && <article className="assistant-message assistant thinking"><span>AI</span><div><p>{c("正在查找匹配产品并整理建议", "Checking matching products and preparing recommendations")}<span className="thinking-dots">…</span></p></div></article>}
         </div>
         {messages.length === 1 && (
           <div className="assistant-quick-prompts">
-            <span>可以这样问</span>
+            <span>{c("您可以这样问", "Try asking")}</span>
             {quickPrompts.map((prompt) => <button key={prompt} onClick={() => sendMessage(prompt)}>{prompt}<b>→</b></button>)}
           </div>
         )}
         {error && <div className="assistant-error">{error}<button onClick={() => setError("")}>×</button></div>}
         <form className="assistant-composer" onSubmit={(event) => { event.preventDefault(); sendMessage(); }}>
-          <textarea value={composerValue} onChange={(event) => { setDismissedPromptId(promptRequest?.id ?? null); setInput(event.target.value); }} placeholder="描述机器人任务、距离、接口、环境或直接输入产品型号…" maxLength={4000} />
-          <div><span>资料内回答 · 不确定项转人工</span><button disabled={loading || !composerValue.trim()} type="submit">发送 ↑</button></div>
+          <textarea value={composerValue} onChange={(event) => { setDismissedPromptId(promptRequest?.id ?? null); setInput(event.target.value); }} placeholder={c("描述任务、距离、接口、环境、数量，或直接输入产品型号…", "Describe the task, range, interface, environment and quantity, or enter a model…")} maxLength={4000} />
+          <div><span>{c("依据产品资料回答 · 未确认项转人工", "Verified product data · Unconfirmed items go to a specialist")}</span><button disabled={loading || !composerValue.trim()} type="submit">{c("发送 ↑", "Send ↑")}</button></div>
         </form>
       </aside>
     </div>
@@ -402,32 +448,34 @@ function Header({
   onNavigateSection: (sectionId: string) => void;
   onOpenAssistant: () => void;
 }) {
+  const { locale, setLocale, c } = useClientCopy();
   return (
     <header className="site-header">
       <Logo onClick={() => onNavigate("home")} />
-      <nav aria-label="主导航">
-        <button onClick={() => onNavigateSection("products")}>产品中心</button>
-        <button onClick={() => onNavigateSection("scenarios")}>机器人场景</button>
-        <button onClick={() => onNavigateSection("workflow")}>选型流程</button>
-        <button onClick={() => onNavigateSection("support")}>技术支持</button>
-        <a href={withBasePath("/admin")}>管理端</a>
+      <nav aria-label={c("主导航", "Main navigation")}>
+        <button onClick={() => onNavigateSection("products")}>{c("产品", "Products")}</button>
+        <button onClick={() => onNavigateSection("scenarios")}>{c("应用场景", "Applications")}</button>
+        <button onClick={() => onNavigateSection("workflow")}>{c("采购方式", "How to buy")}</button>
+        <button onClick={() => onNavigateSection("support")}>{c("选型支持", "Selection support")}</button>
       </nav>
       <div className="header-actions">
-        <button className="text-button">中 / EN</button>
-        <button className="text-button ops-entry" onClick={() => window.location.assign(withBasePath("/admin"))}>管理端</button>
-        <button className="ai-header-button" onClick={onOpenAssistant}><span>AI</span> 智能选型</button>
-        <button className="outline-button compact" onClick={() => onNavigate("custom")}>联系销售</button>
+        <button className="language-switch" onClick={() => setLocale(locale === "zh" ? "en" : "zh")} aria-label={c("切换为英文", "Switch to Chinese")}>
+          <span className={locale === "zh" ? "active" : ""}>中</span><i /> <span className={locale === "en" ? "active" : ""}>EN</span>
+        </button>
+        <button className="ai-header-button" onClick={onOpenAssistant}><span>AI</span> {c("帮我选型", "Find a product")}</button>
+        <button className="outline-button compact" onClick={() => onNavigate("custom")}>{c("提交需求", "Request a quote")}</button>
       </div>
     </header>
   );
 }
 
 function Progress({ step, custom = false }: { step: number; custom?: boolean }) {
+  const { c } = useClientCopy();
   const labels = custom
-    ? ["需求描述", "附件与联系人", "提交完成"]
-    : ["选择标准件", "确认配置", "下单完成"];
+    ? [c("描述需求", "Describe needs"), c("联系信息", "Contact details"), c("提交完成", "Submitted")]
+    : [c("选择产品", "Select product"), c("确认配置", "Configure"), c("提交完成", "Submitted")];
   return (
-    <div className="progress" aria-label="流程进度">
+    <div className="progress" aria-label={c("流程进度", "Progress")}>
       {labels.map((label, index) => (
         <div className={index + 1 <= step ? "progress-step active" : "progress-step"} key={label}>
           <span>{index + 1 < step ? "✓" : index + 1}</span>
@@ -438,32 +486,35 @@ function Progress({ step, custom = false }: { step: number; custom?: boolean }) 
   );
 }
 
-function AiJourneyRibbon({
+function BuyerNeedBar({
   view,
-  brief,
-  selected,
   onOpenAssistant,
 }: {
   view: View;
-  brief: DiscoveryBrief;
-  selected: Product;
   onOpenAssistant: () => void;
 }) {
-  const activeStep = view === "home" ? 1 : view === "standard" ? 2 : 3;
-  const message = view === "home"
-    ? `正在围绕“${brief.scene} · ${brief.goal}”持续理解需求`
+  const { c } = useClientCopy();
+  const content = view === "home"
+    ? {
+      title: c("不确定具体型号？", "Not sure which model fits?"),
+      detail: c("告诉我们用途、工作距离、接口和数量，先获得候选产品。", "Share your task, working range, interface and quantity to get a shortlist."),
+      action: c("帮我选型", "Find a product"),
+    }
     : view === "standard"
-      ? `已带入场景上下文，正在校验 ${selected.model} 的配置适配性`
-      : `已继承前序选型上下文，正在补全工程评估信息`;
+      ? {
+        title: c("正在准备采购意向", "Preparing your purchase request"),
+        detail: c("核对配置、数量和收货信息，价格、库存与交期由销售确认。", "Review configuration, quantity and delivery details; sales will confirm price, stock and lead time."),
+        action: c("咨询配置", "Ask about configuration"),
+      }
+      : {
+        title: c("需要工程配合？", "Need engineering input?"),
+        detail: c("补充技术边界和项目计划，我们会安排销售与工程师联合评估。", "Add technical constraints and project timing for a joint sales and engineering review."),
+        action: c("咨询需求", "Discuss requirements"),
+      };
   return (
-    <section className="ai-journey-ribbon" aria-label="AI 协同选型进度">
-      <div className="ai-journey-status"><span>AI</span><p><b>选型 Copilot 持续在线</b><small>{message}</small></p></div>
-      <div className="ai-journey-steps">
-        {["理解场景", "推荐与校验", "形成可跟进需求"].map((item, index) => (
-          <span className={index + 1 <= activeStep ? "active" : ""} key={item}><i>{index + 1 < activeStep ? "✓" : index + 1}</i>{item}</span>
-        ))}
-      </div>
-      <button className="ai-ribbon-action" onClick={onOpenAssistant}>向 AI 描述需求 →</button>
+    <section className="buyer-need-bar" aria-label={c("采购选型帮助", "Product selection help")}>
+      <div><span>?</span><p><b>{content.title}</b><small>{content.detail}</small></p></div>
+      <button onClick={onOpenAssistant}>{content.action} <i>→</i></button>
     </section>
   );
 }
@@ -481,6 +532,7 @@ function AiDiscoveryWorkspace({
   onSelect: (product: Product) => void;
   onAskAi: (prompt: string) => void;
 }) {
+  const { locale, c, v } = useClientCopy();
   const recommendations = useMemo(() => recommendProducts(brief), [brief]);
   const primary = recommendations[0];
 
@@ -492,53 +544,57 @@ function AiDiscoveryWorkspace({
   return (
     <section className="ai-discovery-workspace" id="ai-discovery">
       <div className="ai-discovery-heading">
-        <div><span className="ai-orb compact">AI</span><p><small>CONTEXTUAL PRODUCT COPILOT</small><b>先说场景，AI 和你一起缩小选型范围</b></p></div>
-        <span className="ai-live-state"><i /> 推荐随选择实时更新</span>
+        <div><span className="ai-orb compact">AI</span><p><small>GUIDED PRODUCT SELECTION</small><b>{c("按您的应用条件，筛选合适的产品", "Shortlist products for your application")}</b></p></div>
+        <span className="ai-live-state"><i /> {c("选择条件后立即查看建议", "Recommendations update as you select")}</span>
       </div>
       <div className="ai-discovery-grid">
         <div className="ai-brief-builder">
           <label>
-            <span>1 · 机器人场景</span>
+            <span>{c("1 · 机器人类型", "1 · Robot type")}</span>
             <div className="choice-chips">
               {discoveryScenes.map((scene) => (
-                <button className={brief.scene === scene ? "active" : ""} type="button" key={scene} onClick={() => onBriefChange({ ...brief, scene })}>{scene}</button>
+                <button className={brief.scene === scene ? "active" : ""} type="button" key={scene} onClick={() => onBriefChange({ ...brief, scene })}>{v(scene)}</button>
               ))}
             </div>
           </label>
           <label>
-            <span>2 · 当前最想解决的问题</span>
+            <span>{c("2 · 主要采购用途", "2 · Primary application")}</span>
             <div className="choice-chips goal-chips">
               {discoveryGoals.map((goal) => (
-                <button className={brief.goal === goal ? "active" : ""} type="button" key={goal} onClick={() => onBriefChange({ ...brief, goal })}>{goal}</button>
+                <button className={brief.goal === goal ? "active" : ""} type="button" key={goal} onClick={() => onBriefChange({ ...brief, goal })}>{v(goal)}</button>
               ))}
             </div>
           </label>
           <label className="ai-stage-field">
-            <span>3 · 项目阶段</span>
+            <span>{c("3 · 当前项目阶段", "3 · Current project stage")}</span>
             <select value={brief.stage} onChange={(event) => onBriefChange({ ...brief, stage: event.target.value as DiscoveryBrief["stage"] })}>
-              <option>概念设计</option><option>Demo / 样机</option><option>样机验证</option><option>小批量验证</option>
+              {(["概念设计", "Demo / 样机", "样机验证", "小批量验证"] as DiscoveryBrief["stage"][]).map((stage) => <option value={stage} key={stage}>{v(stage)}</option>)}
             </select>
-            <small>阶段会影响标准件优先级、工程介入方式和交期提示。</small>
+            <small>{c("项目阶段有助于我们判断样品、工程评审和交付安排。", "The project stage helps us assess samples, engineering review and delivery planning.")}</small>
           </label>
         </div>
         <div className="ai-recommendation-result" aria-live="polite">
-          <div className="recommendation-topline"><span>首选建议 · {primary.score}% 场景匹配</span><b>基于已确认产品资料</b></div>
+          <div className="recommendation-topline"><span>{c("优先考虑", "Top candidate")} · {primary.score}% {c("条件匹配", "match")}</span><b>{c("依据已确认产品资料", "Based on verified product data")}</b></div>
           <div className="recommended-product">
             <img src={primary.product.image} alt="" />
-            <div><small>{primary.product.model}</small><h3>{primary.product.name}</h3><p>{primary.reason}。</p></div>
+            <div><small>{primary.product.model}</small><h3>{v(primary.product.name)}</h3><p>{v(primary.reason)}{locale === "zh" ? "。" : "."}</p></div>
           </div>
           <div className="ai-reasoning">
-            <span>为什么推荐</span>
-            <p>你的目标是“{brief.goal}”，处于{brief.stage}阶段。AI 优先考虑场景覆盖、现有接口能力与当前可交付状态。</p>
+            <span>{c("建议依据", "Why it fits")}</span>
+            <p>{locale === "zh"
+              ? `您计划用于“${brief.goal}”，当前处于${brief.stage}阶段。建议综合考虑工作范围、接口、安装条件和供货状态。`
+              : `Your application is “${v(brief.goal)}” at the ${v(brief.stage)} stage. The shortlist considers working range, interfaces, installation constraints and availability.`}</p>
           </div>
           <div className="recommendation-actions">
-            <button className="primary-button" onClick={() => startConfiguration(primary.product)}>带着上下文继续配置 →</button>
-            <button className="outline-button" onClick={() => onAskAi(`请结合我的${brief.scene}场景、${brief.goal}目标和${brief.stage}阶段，解释为什么推荐 ${primary.product.model}，并给出候选组合方案和需要确认的问题。`)}>让真实 AI 深入分析</button>
+            <button className="primary-button" onClick={() => startConfiguration(primary.product)}>{c("查看配置并提交采购意向", "Configure and request a quote")} →</button>
+            <button className="outline-button" onClick={() => onAskAi(locale === "zh"
+              ? `请结合我的${brief.scene}场景、${brief.goal}目标和${brief.stage}阶段，解释为什么推荐 ${primary.product.model}，并给出候选组合方案和需要确认的问题。`
+              : `For my ${v(brief.scene)} application, ${v(brief.goal)} goal and ${v(brief.stage)} stage, explain why ${primary.product.model} is recommended, suggest alternatives and list what still needs confirmation.`)}>{c("询问选型助理", "Ask the product advisor")}</button>
           </div>
           <div className="alternative-products">
-            <span>也可比较</span>
+            <span>{c("其他候选", "Other candidates")}</span>
             {recommendations.slice(1, 3).map(({ product, score }) => (
-              <button key={product.id} onClick={() => startConfiguration(product)}><b>{product.model}</b><small>{score}% 匹配</small></button>
+              <button key={product.id} onClick={() => startConfiguration(product)}><b>{product.model}</b><small>{score}% {c("匹配", "match")}</small></button>
             ))}
           </div>
         </div>
@@ -560,6 +616,7 @@ function Home({
   onBriefChange: (brief: DiscoveryBrief) => void;
   onAskAi: (prompt: string) => void;
 }) {
+  const { locale, c, v } = useClientCopy();
   const [query, setQuery] = useState("");
   const [catalogFilter, setCatalogFilter] = useState("为你推荐");
   const recommendations = useMemo(() => recommendProducts(brief), [brief]);
@@ -569,13 +626,13 @@ function Home({
     if (query.trim()) {
       const q = query.toLowerCase();
       return products.filter((product) =>
-        `${product.name}${product.model}${product.kind}${product.description}${product.verified.join("")}`.toLowerCase().includes(q),
+        `${product.name}${localizeValue(locale, product.name)}${product.model}${product.kind}${localizeValue(locale, product.kind)}${product.description}${localizeValue(locale, product.description)}${product.verified.join("")}${product.verified.map((item) => localizeValue(locale, item)).join("")}`.toLowerCase().includes(q),
       );
     }
     if (catalogFilter === "为你推荐") return recommendations.slice(0, 4).map(({ product }) => product);
     if (catalogFilter === "全部产品") return products;
     return products.filter((product) => product.kind === catalogFilter);
-  }, [catalogFilter, query, recommendations]);
+  }, [catalogFilter, locale, query, recommendations]);
 
   function startSearch(event: FormEvent) {
     event.preventDefault();
@@ -584,10 +641,19 @@ function Home({
       document.getElementById("products")?.scrollIntoView({ behavior: "smooth", block: "start" });
     } else {
       onAskAi(query.trim()
-        ? `请根据这个需求帮我搜索产品并给出方案：${query}`
-        : "我还不确定具体型号，请通过几个关键问题帮我完成机器人元器件选型。");
+        ? locale === "zh" ? `请根据这个需求帮我搜索产品并给出方案：${query}` : `Find suitable products for this requirement and explain the shortlist: ${query}`
+        : c("我还不确定具体型号，请通过几个关键问题帮我完成机器人元器件选型。", "I am not sure which model I need. Ask a few key questions and help me shortlist robot components."));
     }
   }
+
+  const catalogFilterLabel = (filter: string) => ({
+    "为你推荐": c("为您推荐", "Recommended"),
+    "全部产品": c("全部产品", "All products"),
+    "计算与控制": v("计算与控制"),
+    "3D 感知": v("3D 感知"),
+    "环境感知": v("环境感知"),
+    "运动感知": v("运动感知"),
+  }[filter] ?? filter);
 
   return (
     <>
@@ -596,28 +662,36 @@ function Home({
         <div className="hero-ambient ambient-two" data-parallax="fast" />
         <div className="hero-grid">
           <div className="hero-copy" data-reveal>
-            <div className="eyebrow"><span /> ROBOTICS PRODUCT INTELLIGENCE</div>
-            <h1>让复杂选型，<br /><em>回归简单。</em></h1>
-            <p>从任务出发理解需求，以真实产品资料给出候选方案。参数明确就继续配置，边界复杂则无缝交给销售与工程师。</p>
+            <div className="eyebrow"><span /> ROBOTICS COMPONENTS</div>
+            <h1>{c("从需求出发，", "Find the right component,")}<br /><em>{c("找到合适的产品。", "starting with your application.")}</em></h1>
+            <p>{c(
+              "输入工作距离、接口、使用环境和预计数量，快速筛选候选产品。确定配置后可直接提交采购意向，复杂需求由销售与工程师继续协助。",
+              "Enter your working range, interface, environment and expected quantity to shortlist products. Submit a purchase request when ready, or involve sales and engineering for complex requirements.",
+            )}</p>
             <form className="search-box" onSubmit={startSearch}>
               <label>
                 <span className="search-icon">⌕</span>
-                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="描述任务或搜索型号，例如：0.3–4 米 USB 避障" />
+                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={c("搜索型号，或描述用途、距离和接口", "Search a model or describe the task, range and interface")} />
               </label>
-              <button type="submit" className="primary-button">{query.trim() ? "查看匹配" : "问 AI 助理"}</button>
+              <button type="submit" className="primary-button">{query.trim() ? c("查看匹配", "View matches") : c("帮我选型", "Find a product")}</button>
             </form>
             <div className="hot-searches">
-              <span>快速开始</span>
-              {["AMR 避障", "人形机器人姿态", "三维感知", "硬实时控制"].map((item) => (
-                <button key={item} onClick={() => onAskAi(`请围绕“${item}”帮我澄清需求并推荐 JOYNEXT 产品方案。`)}>{item}</button>
+              <span>{c("常见需求", "Common needs")}</span>
+              {[
+                ["AMR 避障", "AMR obstacle avoidance"],
+                ["人形机器人姿态", "Humanoid attitude sensing"],
+                ["三维感知", "3D perception"],
+                ["硬实时控制", "Hard real-time control"],
+              ].map(([zh, en]) => (
+                <button key={zh} onClick={() => onAskAi(locale === "zh" ? `请围绕“${zh}”帮我澄清需求并推荐 JOYNEXT 产品方案。` : `Help clarify my requirements for “${en}” and recommend suitable JOYNEXT products.`)}>{c(zh, en)}</button>
               ))}
             </div>
             <div className="hero-proof">
-              <span><b>{products.length}</b><small>项资料产品</small></span>
+              <span><b>{products.length}</b><small>{c("个产品方向", "product options")}</small></span>
               <i />
-              <span><b>真实 AI</b><small>多轮需求理解</small></span>
+              <span><b>{c("参数可追溯", "Traceable data")}</b><small>{c("标注资料来源", "Source-referenced")}</small></span>
               <i />
-              <span><b>人机协同</b><small>未知边界转人工</small></span>
+              <span><b>{c("专业协助", "Specialist support")}</b><small>{c("销售与工程确认", "Sales & engineering")}</small></span>
             </div>
           </div>
           <div className="hero-product-stage" data-reveal data-parallax="slow">
@@ -625,19 +699,19 @@ function Home({
             <span className="stage-kicker">nRB-H1 · ROBOT DOMAIN CONTROLLER</span>
             <img src={withBasePath("/products/domain-controller.png")} alt="nRB-H1 机器人域控制器" />
             <div className="stage-caption">
-              <span><i /> 初步工程状态</span>
-              <strong>脑—小脑融合计算平台</strong>
+              <span><i /> {v("初步工程状态")}</span>
+              <strong>{c("脑—小脑融合计算平台", "Integrated AI computing & real-time control")}</strong>
               <button onClick={() => {
                 const product = products.find((item) => item.id === "controller-h1") ?? products[0];
                 onSelect(product);
                 onNavigate("standard");
-              }}>探索产品 <b>↗</b></button>
+              }}>{c("查看产品", "View product")} <b>↗</b></button>
             </div>
-            <div className="stage-spec spec-top"><b>≤ 1 ms</b><span>硬实时控制周期</span></div>
-            <div className="stage-spec spec-bottom"><b>2,070 TOPS</b><span>整机峰值算力</span></div>
+            <div className="stage-spec spec-top"><b>≤ 1 ms</b><span>{c("硬实时控制周期", "Hard real-time cycle")}</span></div>
+            <div className="stage-spec spec-bottom"><b>2,070 TOPS</b><span>{c("整机峰值算力", "Peak system compute")}</span></div>
           </div>
         </div>
-        <div className="scroll-cue"><span /> 向下探索</div>
+        <div className="scroll-cue"><span /> {c("浏览产品", "Explore products")}</div>
       </section>
 
       <main className="customer-home">
@@ -645,8 +719,8 @@ function Home({
 
         <section className="scenario-section" id="scenarios">
           <div className="section-heading split" data-reveal>
-            <div><span>BUILT AROUND THE TASK</span><h2>先看任务，再看部件。</h2></div>
-            <p>不同机器人共享相似的传感器与计算平台，但任务目标、工作距离和系统边界决定真正合适的组合。</p>
+            <div><span>SHOP BY APPLICATION</span><h2>{c("按机器人应用查看产品。", "Explore products by application.")}</h2></div>
+            <p>{c("选择接近您的机器人类型，我们会优先展示适合该任务、工作距离和系统条件的产品。", "Choose the robot type closest to your project to see products suited to its task, working range and system constraints.")}</p>
           </div>
           <div className="scenario-grid">
             {scenarios.map((scenario, index) => (
@@ -658,7 +732,11 @@ function Home({
                 onNavigate("standard");
               }}>
                 <img src={scenario.image} alt="" />
-                <div><small>0{index + 1} / SCENARIO</small><span>{scenario.icon}</span><h3>{scenario.name}</h3><p>{scenario.note}</p><b>进入场景 <i>↗</i></b></div>
+                <div><small>0{index + 1} / APPLICATION</small><span>{scenario.icon}</span><h3>{v(scenario.name)}</h3><p>{scenario.name === "AMR / AGV"
+                  ? c("导航、定位与多传感器融合", "Navigation, positioning and multi-sensor fusion")
+                  : scenario.name === "人形机器人"
+                    ? c("感知、规划与硬实时伺服控制", "Perception, planning and hard real-time servo control")
+                    : c("高精度定位、视觉与末端感知", "Precision positioning, vision and end-effector sensing")}</p><b>{c("查看适用产品", "View suitable products")} <i>↗</i></b></div>
               </button>
             ))}
           </div>
@@ -666,68 +744,73 @@ function Home({
 
         <section className="products-section" id="products">
           <div className="section-heading split" data-reveal>
-            <div><span>CURATED PRODUCT CATALOG</span><h2>只突出此刻有用的信息。</h2><p>参数来自产品资料；工程状态、未知价格与待确认边界会被明确标出。</p></div>
-            <button className="text-arrow-button" onClick={() => onNavigate("standard")}>进入完整比较 <span>↗</span></button>
+            <div><span>PRODUCT CATALOG</span><h2>{c("找到符合采购条件的候选产品。", "Find products that fit your requirements.")}</h2><p>{c("关键参数均来自产品资料；价格、库存、交期和需要工程确认的项目会明确标注。", "Key specifications come from product documentation. Price, availability, lead time and engineering-review items are clearly marked.")}</p></div>
+            <button className="text-arrow-button" onClick={() => onNavigate("standard")}>{c("比较并配置产品", "Compare and configure")} <span>↗</span></button>
           </div>
           <div className="catalog-toolbar" data-reveal>
             <div className="catalog-filters">
               {catalogFilters.map((filter) => (
-                <button className={catalogFilter === filter && !query ? "active" : ""} key={filter} onClick={() => { setCatalogFilter(filter); setQuery(""); }}>{filter}</button>
+                <button className={catalogFilter === filter && !query ? "active" : ""} key={filter} onClick={() => { setCatalogFilter(filter); setQuery(""); }}>{catalogFilterLabel(filter)}</button>
               ))}
             </div>
-            {query && <button className="clear-search" onClick={() => setQuery("")}>清除“{query}” ×</button>}
+            {query && <button className="clear-search" onClick={() => setQuery("")}>{c("清除", "Clear")} “{query}” ×</button>}
           </div>
           <div className="product-grid">
             {visible.map((product, index) => (
               <article className={product.id === recommendedId ? "product-card ai-recommended" : "product-card"} data-reveal style={{ "--reveal-delay": `${index * 70}ms` } as React.CSSProperties} key={product.id}>
                 <div className="product-image">
-                  <span>{product.kind}</span>
-                  {product.id === recommendedId && <b className="ai-match-badge">AI 首选 · {recommendations[0].score}%</b>}
-                  <img src={product.image} alt={product.name} />
-                  <small>{product.status}</small>
+                  <span>{v(product.kind)}</span>
+                  {product.id === recommendedId && <b className="ai-match-badge">{c("优先匹配", "Top match")} · {recommendations[0].score}%</b>}
+                  <img src={product.image} alt={v(product.name)} />
+                  <small>{v(product.status)}</small>
                 </div>
                 <div className="product-body">
-                  <small>{product.model} · PPT P.{product.sourceSlide}</small>
-                  <h3>{product.name}</h3>
-                  <p>{product.description}</p>
-                  <div className="spec-chips">{product.verified.slice(0, 2).map((spec) => <span key={spec}>{spec}</span>)}</div>
+                  <small>{product.model} · {c("资料", "Source")} P.{product.sourceSlide}</small>
+                  <h3>{v(product.name)}</h3>
+                  <p>{v(product.description)}</p>
+                  <div className="spec-chips">{product.verified.slice(0, 2).map((spec) => <span key={spec}>{v(spec)}</span>)}</div>
                   <div className="product-foot">
-                    <button onClick={() => onAskAi(`请解释 ${product.model} ${product.name} 的能力、适用场景、与相近产品的差异，以及哪些信息仍需工程师确认。`)}>问 AI</button>
-                    <button onClick={() => { onSelect(product); onNavigate("standard"); }}>配置 <span>↗</span></button>
+                    <button onClick={() => onAskAi(locale === "zh" ? `请解释 ${product.model} ${product.name} 的能力、适用场景、与相近产品的差异，以及哪些信息仍需工程师确认。` : `Explain ${product.model} ${v(product.name)}, its suitable applications, differences from similar products, and what still needs engineering confirmation.`)}>{c("咨询产品", "Ask about product")}</button>
+                    <button onClick={() => { onSelect(product); onNavigate("standard"); }}>{c("查看配置", "Configure")} <span>↗</span></button>
                   </div>
                 </div>
               </article>
             ))}
           </div>
-          {!visible.length && <div className="catalog-empty"><b>暂未找到资料内匹配项</b><p>可以换一个关键词，或让 AI 通过任务描述继续寻找。</p><button onClick={() => onAskAi(`请根据这个需求推荐可用产品：${query}`)}>交给 AI 分析 →</button></div>}
+          {!visible.length && <div className="catalog-empty"><b>{c("暂未找到匹配产品", "No matching product found")}</b><p>{c("请尝试其他关键词，或描述用途、距离与接口，让选型助理继续查找。", "Try another keyword or describe the task, range and interface so the advisor can continue the search.")}</p><button onClick={() => onAskAi(locale === "zh" ? `请根据这个需求推荐可用产品：${query}` : `Recommend available products for this requirement: ${query}`)}>{c("继续查找", "Continue with advisor")} →</button></div>}
         </section>
 
         <section className="path-section" id="workflow">
           <div className="section-heading center" data-reveal>
-            <span>ONE JOURNEY, TWO PATHS</span>
-            <h2>清楚的需求，走更短的路。</h2>
-            <p>不强迫所有客户填写同一张表。资料内可配置的产品快速提交，复杂边界再进入联合评估。</p>
+            <span>TWO WAYS TO REQUEST</span>
+            <h2>{c("根据需求清晰度，选择提交方式。", "Choose the right request path.")}</h2>
+            <p>{c("型号和接口明确时直接提交采购意向；需要适配开发或技术确认时，提交项目需求获得联合评估。", "Submit a purchase request when the model and interface are clear, or request a joint review when adaptation or technical confirmation is needed.")}</p>
           </div>
           <div className="path-grid">
             <article className="path-card standard" id="standard-order" data-reveal>
               <div className="path-topline"><span>01</span><b>STANDARD</b></div>
               <div className="path-icon">↗</div>
-              <div><h3>产品与接口已经明确</h3><p>核对来源参数，选择对应配置，提交采购意向。</p><ul><li>产品级动态配置项</li><li>公司与交付信息</li><li>销售确认价格、库存与交期</li></ul></div>
-              <button className="primary-button" onClick={() => onNavigate("standard")}>开始标准选型 <span>→</span></button>
+              <div><h3>{c("我已大致确定产品", "I have a product in mind")}</h3><p>{c("核对参数、选择配置与数量，并提交采购意向。", "Review specifications, select configuration and quantity, then submit a purchase request.")}</p><ul><li>{c("按产品选择接口和使用条件", "Select interfaces and operating conditions")}</li><li>{c("填写公司与收货信息", "Provide company and delivery details")}</li><li>{c("销售确认价格、库存与交期", "Sales confirms price, stock and lead time")}</li></ul></div>
+              <button className="primary-button" onClick={() => onNavigate("standard")}>{c("选择并配置产品", "Select and configure")} <span>→</span></button>
             </article>
             <article className="path-card custom" data-reveal style={{ "--reveal-delay": "100ms" } as React.CSSProperties}>
               <div className="path-topline"><span>02</span><b>ENGINEERING</b></div>
               <div className="path-icon">＋</div>
-              <div><h3>系统边界仍需要共同定义</h3><p>AI 帮助补全信息，销售与工程师完成技术和商务确认。</p><ul><li>边填写边评估完整度</li><li>实时参考估价区间</li><li>结构化摘要直接交接</li></ul></div>
-              <button className="dark-button" onClick={() => onNavigate("custom")}>进入联合评估 <span>→</span></button>
+              <div><h3>{c("我需要方案或适配支持", "I need a solution or adaptation")}</h3><p>{c("描述项目目标和技术条件，由销售与工程师共同评估。", "Describe the project goal and technical constraints for a joint sales and engineering review.")}</p><ul><li>{c("补充接口、环境和安装边界", "Capture interface, environment and installation constraints")}</li><li>{c("查看初步参考估价区间", "View a preliminary price range")}</li><li>{c("获得候选产品和后续确认清单", "Receive candidates and a confirmation checklist")}</li></ul></div>
+              <button className="dark-button" onClick={() => onNavigate("custom")}>{c("提交项目需求", "Submit project requirements")} <span>→</span></button>
             </article>
           </div>
         </section>
 
         <section className="trust-boundary-section" id="support" data-reveal>
-          <div className="trust-boundary-copy"><span>AI, WITH CLEAR BOUNDARIES</span><h2>智能负责提效，<br />专业判断仍由人完成。</h2><p>AI 只基于已确认资料解释、检索和组织方案。兼容性、最终设计、正式价格和履约承诺由授权人员确认。</p><button onClick={() => onAskAi("请介绍你能为机器人元器件选型提供哪些帮助，以及哪些问题需要转给销售或工程师。")}>和 AI 选型助理聊聊 <b>↗</b></button></div>
+          <div className="trust-boundary-copy"><span>RELIABLE SELECTION SUPPORT</span><h2>{c("先获得清晰建议，", "Get a clear starting point,")}<br />{c("再由专业人员确认。", "then confirm with a specialist.")}</h2><p>{c("选型建议依据已确认产品资料。兼容性、最终设计、正式价格、库存、交期和履约承诺由销售或工程师确认。", "Selection guidance uses verified product data. Compatibility, final design, formal pricing, stock, lead time and delivery commitments are confirmed by sales or engineering.")}</p><button onClick={() => onAskAi(c("请帮我梳理采购条件，并说明哪些信息可以直接确认、哪些需要销售或工程师确认。", "Help me structure my purchasing requirements and explain what is confirmed versus what needs sales or engineering review."))}>{c("咨询选型问题", "Ask a selection question")} <b>↗</b></button></div>
           <div className="trust-principles">
-            {[["01", "资料内回答", "产品事实附带 PPT 页码来源"], ["02", "不确定就说明", "不猜测参数、认证、库存和交期"], ["03", "上下文不丢失", "从选型到需求单保持同一份摘要"], ["04", "关键结论转人工", "工程与商务边界由授权人员确认"]].map(([number, title, detail]) => (
+            {[
+              ["01", c("参数来源清楚", "Traceable specifications"), c("关键产品信息标注资料页码", "Key product information includes source pages")],
+              ["02", c("待确认项明确", "Unconfirmed items are clear"), c("不猜测认证、库存、价格和交期", "No guessing on certification, stock, price or lead time")],
+              ["03", c("需求一次提交", "Submit requirements once"), c("选型条件随采购意向一并交接", "Selection context is handed over with your request")],
+              ["04", c("专业人员跟进", "Specialist follow-up"), c("技术与商务结论由授权人员确认", "Authorized staff confirms technical and commercial terms")],
+            ].map(([number, title, detail]) => (
               <div key={number}><span>{number}</span><p><b>{title}</b><small>{detail}</small></p></div>
             ))}
           </div>
@@ -746,13 +829,14 @@ function ProductList({
   onSelect: (p: Product) => void;
   recommendedId: string;
 }) {
+  const { c, v } = useClientCopy();
   return (
     <div className="selection-grid">
       {products.map((product) => (
         <button className={product.id === selected.id ? "select-card selected" : "select-card"} onClick={() => onSelect(product)} key={product.id}>
-          <div className="select-image"><img src={product.image} alt="" /><span>{product.kind}</span>{product.id === recommendedId && <b className="ai-select-match">AI 首选</b>}</div>
-          <div><small>{product.model}</small><h3>{product.name}</h3><p>{product.description}</p></div>
-          <div className="select-bottom"><strong>{product.price}</strong><span>{product.lead}</span></div>
+          <div className="select-image"><img src={product.image} alt="" /><span>{v(product.kind)}</span>{product.id === recommendedId && <b className="ai-select-match">{c("优先匹配", "Top match")}</b>}</div>
+          <div><small>{product.model}</small><h3>{v(product.name)}</h3><p>{v(product.description)}</p></div>
+          <div className="select-bottom"><strong>{v(product.price)}</strong><span>{v(product.lead)}</span></div>
         </button>
       ))}
     </div>
@@ -766,7 +850,6 @@ function StandardFlow({
   onCustom,
   onComplete,
   onLeadCreated,
-  onViewOperations,
   brief,
   onBriefChange,
   onAskAi,
@@ -777,11 +860,11 @@ function StandardFlow({
   onCustom: () => void;
   onComplete: () => void;
   onLeadCreated: (lead: LeadRecord) => void;
-  onViewOperations: () => void;
   brief: DiscoveryBrief;
   onBriefChange: (brief: DiscoveryBrief) => void;
   onAskAi: (prompt: string) => void;
 }) {
+  const { locale, c, v } = useClientCopy();
   const [step, setStep] = useState(1);
   const [qty, setQty] = useState(1);
   const [productConfigurations, setProductConfigurations] = useState<Record<string, Record<string, string>>>({});
@@ -810,28 +893,34 @@ function StandardFlow({
   const total = (demoUnitPrices[selected.id] ?? 0) * qty;
   const customerComplete = [customer.company, customer.contact, customer.contactDetail, customer.country, customer.city, customer.address]
     .every((value) => value.trim().length > 0);
-  const customerLocation = `${customer.country} · ${customer.city}`;
+  const customerLocation = `${v(customer.country)} · ${customer.city}`;
   const recommendations = useMemo(() => recommendProducts(brief), [brief]);
   const recommended = recommendations[0];
   const selectedMatch = recommendations.find((item) => item.product.id === selected.id) ?? recommendations[0];
   const configurationSignals = [
     {
-      label: "场景适配",
+      label: c("用途匹配", "Application fit"),
       status: `${selectedMatch.score}%`,
       tone: selectedMatch.score >= 85 ? "good" : "attention",
-      detail: `${selected.model} 与“${brief.scene} · ${brief.goal}”的资料匹配度`,
+      detail: locale === "zh"
+        ? `${selected.model} 与“${brief.scene} · ${brief.goal}”的资料匹配度`
+        : `${selected.model} fit for “${v(brief.scene)} · ${v(brief.goal)}” based on available data`,
     },
     {
-      label: "配置风险",
-      status: engineering ? "需工程确认" : primaryInterface.includes("需确认") || primaryInterface.includes("EtherCAT") ? "需核对接口" : "资料内可配置",
+      label: c("配置确认", "Configuration check"),
+      status: engineering ? c("需工程确认", "Engineering review") : primaryInterface.includes("需确认") || primaryInterface.includes("EtherCAT") ? c("需核对接口", "Interface check") : c("资料内可配置", "Configurable"),
       tone: engineering || primaryInterface.includes("需确认") || primaryInterface.includes("EtherCAT") ? "attention" : "good",
-      detail: engineering ? "最终接口、安装、环境与系统边界需要联合评审" : `${primaryInterface} 已纳入采购意向摘要`,
+      detail: engineering
+        ? c("最终接口、安装、环境与系统边界需要联合评审", "Final interfaces, installation, environment and system constraints require joint review")
+        : locale === "zh" ? `${primaryInterface} 已纳入采购意向摘要` : `${v(primaryInterface)} is included in your purchase request`,
     },
     {
-      label: "商务动作",
-      status: qty > 10 ? "销售介入" : "可自助提交",
+      label: c("采购下一步", "Purchasing next step"),
+      status: qty > 10 ? c("销售确认批量需求", "Sales checks volume") : c("可提交采购意向", "Ready to submit"),
       tone: qty > 10 ? "attention" : "good",
-      detail: qty > 10 ? "批量需求将自动确认阶梯价格、库存和排期" : "补全客户与地址后即可进入订单队列",
+      detail: qty > 10
+        ? c("销售将确认阶梯价格、库存和交付计划", "Sales will confirm volume pricing, stock and delivery plan")
+        : c("补全公司与收货信息后即可提交", "Complete company and delivery details to submit"),
     },
   ];
 
@@ -875,173 +964,184 @@ function StandardFlow({
   return (
     <main className="flow-shell">
       <div className="flow-bar">
-        <button className="back-button" onClick={onHome}>← 返回产品中心</button>
+        <button className="back-button" onClick={onHome}>← {c("返回产品中心", "Back to products")}</button>
         <Progress step={step} />
-        <span className="service-badge"><i /> 销售在线</span>
+        <span className="service-badge"><i /> {c("可咨询销售", "Sales support")}</span>
       </div>
       {step === 1 && (
         <section className="flow-content">
           <div className="flow-title">
-            <span>STANDARD PRODUCT PATH</span>
-            <h1>选择一个标准产品</h1>
-            <p>所有展示参数均标注状态；工程样件在下单前必须完成技术确认。</p>
+            <span>SELECT A PRODUCT</span>
+            <h1>{c("选择产品，准备采购意向", "Choose a product for your request")}</h1>
+            <p>{c("比较已确认参数、适用场景和供货状态。需要工程评审的产品会明确提示。", "Compare verified specifications, applications and availability. Products requiring engineering review are clearly marked.")}</p>
           </div>
           <div className="ai-selection-guide">
-            <div className="ai-guide-copy"><span>AI</span><p><small>已继承首页场景</small><b>{brief.scene} · {brief.goal}</b><em>{brief.stage}</em></p></div>
-            <div className="ai-guide-reason"><span>当前首选</span><b>{recommended.product.model} · {recommended.product.name}</b><p>{recommended.reason}。</p></div>
+            <div className="ai-guide-copy"><span>AI</span><p><small>{c("当前采购条件", "Current requirements")}</small><b>{v(brief.scene)} · {v(brief.goal)}</b><em>{v(brief.stage)}</em></p></div>
+            <div className="ai-guide-reason"><span>{c("优先考虑", "Top candidate")}</span><b>{recommended.product.model} · {v(recommended.product.name)}</b><p>{v(recommended.reason)}{locale === "zh" ? "。" : "."}</p></div>
             <div className="ai-guide-refine">
-              <span>快速调整目标</span>
+              <span>{c("调整主要用途", "Change application")}</span>
               <select value={brief.goal} onChange={(event) => onBriefChange({ ...brief, goal: event.target.value as DiscoveryBrief["goal"] })}>
-                {discoveryGoals.map((goal) => <option key={goal}>{goal}</option>)}
+                {discoveryGoals.map((goal) => <option value={goal} key={goal}>{v(goal)}</option>)}
               </select>
             </div>
           </div>
           <ProductList selected={selected} onSelect={onSelect} recommendedId={recommended.product.id} />
           <div className="sticky-actions">
-            <div><span>当前选择</span><strong>{selected.model} · {selected.name}</strong></div>
-            <button className="primary-button" onClick={() => setStep(2)}>确认并配置 →</button>
+            <div><span>{c("当前选择", "Selected")}</span><strong>{selected.model} · {v(selected.name)}</strong></div>
+            <button className="primary-button" onClick={() => setStep(2)}>{c("查看配置", "Configure product")} →</button>
           </div>
         </section>
       )}
       {step === 2 && (
         <section className="config-layout">
           <div className="config-main">
-            <button className="back-link" onClick={() => setStep(1)}>← 更换产品</button>
+            <button className="back-link" onClick={() => setStep(1)}>← {c("更换产品", "Change product")}</button>
             <div className="config-product">
-              <img src={selected.image} alt={selected.name} />
-              <div><span className="verified-pill">✓ 资料已核对</span><small>{selected.model}</small><h1>{selected.name}</h1><p>{selected.description}</p></div>
+              <img src={selected.image} alt={v(selected.name)} />
+              <div><span className="verified-pill">✓ {c("资料已核对", "Data verified")}</span><small>{selected.model}</small><h1>{v(selected.name)}</h1><p>{v(selected.description)}</p></div>
             </div>
             <div className="panel">
-              <div className="panel-heading"><h2>已确认参数</h2><span>来源：产品资料 2026-07-29</span></div>
+              <div className="panel-heading"><h2>{c("已确认参数", "Verified specifications")}</h2><span>{c("来源：产品资料", "Source: product presentation")} · P.{selected.sourceSlide}</span></div>
               <div className="verified-table">
-                {selected.verified.map((item, index) => <div key={item}><span>{["性能 / 规格", "电气 / 范围", "环境 / 接口", "扩展能力"][index] ?? "参数"}</span><strong>{item}</strong><b>✓ 已确认</b></div>)}
+                {selected.verified.map((item, index) => <div key={item}><span>{[
+                  c("性能 / 规格", "Performance / spec"),
+                  c("电气 / 范围", "Electrical / range"),
+                  c("环境 / 接口", "Environment / interface"),
+                  c("扩展能力", "Expansion"),
+                ][index] ?? c("参数", "Specification")}</span><strong>{v(item)}</strong><b>✓ {c("已确认", "Verified")}</b></div>)}
               </div>
             </div>
             <div className="panel">
-              <div className="panel-heading"><h2>配置选项</h2><span>带 * 为必选</span></div>
+              <div className="panel-heading"><h2>{c("选择采购配置", "Select configuration")}</h2><span>{c("带 * 为必选", "* Required")}</span></div>
               <div className="config-fields">
                 {selected.configuration.map((item) => (
                   <label key={item.key}>
-                    <span>{item.label}</span>
+                    <span>{v(item.label)}</span>
                     <select value={configuration[item.key] ?? item.options[0]} onChange={(event) => setConfigurationValue(item.key, event.target.value)}>
-                      {item.options.map((option) => <option key={option}>{option}</option>)}
+                      {item.options.map((option) => <option value={option} key={option}>{v(option)}</option>)}
                     </select>
-                    {item.note && <small className="field-note">{item.note}</small>}
+                    {item.note && <small className="field-note">{v(item.note)}</small>}
                   </label>
                 ))}
-                <label><span>数量 *</span><div className="quantity"><button type="button" onClick={() => setQty(Math.max(1, qty - 1))}>−</button><input value={qty} readOnly /><button type="button" onClick={() => setQty(qty + 1)}>＋</button></div></label>
+                <label><span>{c("预计数量 *", "Expected quantity *")}</span><div className="quantity"><button type="button" onClick={() => setQty(Math.max(1, qty - 1))}>−</button><input value={qty} readOnly aria-label={c("预计数量", "Expected quantity")} /><button type="button" onClick={() => setQty(qty + 1)}>＋</button></div></label>
               </div>
             </div>
             <div className="ai-configuration-companion" aria-live="polite">
-              <div className="ai-companion-heading"><span>AI</span><p><small>CONTEXT-AWARE CHECK</small><b>配置变化已实时纳入评估</b></p><button type="button" onClick={() => onAskAi(`请评估我为${brief.scene}选择的 ${selected.model} 配置：${Object.entries(configuration).map(([key, value]) => `${key}=${value}`).join("；")}。说明匹配点、风险和仍需确认的参数。`)}>让 AI 评估当前配置 →</button></div>
+              <div className="ai-companion-heading"><span>AI</span><p><small>CONFIGURATION CHECK</small><b>{c("核对当前配置是否符合采购用途", "Check this configuration against your application")}</b></p><button type="button" onClick={() => onAskAi(locale === "zh"
+                ? `请评估我为${brief.scene}选择的 ${selected.model} 配置：${Object.entries(configuration).map(([key, value]) => `${key}=${value}`).join("；")}。说明匹配点、风险和仍需确认的参数。`
+                : `Review my ${selected.model} configuration for a ${v(brief.scene)} application: ${Object.entries(configuration).map(([key, value]) => `${key}=${v(value)}`).join("; ")}. Explain the fit, risks and parameters still requiring confirmation.`)}>{c("咨询当前配置", "Review configuration")} →</button></div>
               <div className="ai-signal-grid">
                 {configurationSignals.map((signal) => (
                   <div className={signal.tone} key={signal.label}><span>{signal.label}</span><strong>{signal.status}</strong><p>{signal.detail}</p></div>
                 ))}
               </div>
-              <p className="ai-handoff-note"><b>下一步建议：</b>{engineering ? "转入定制需求，AI 会保留当前产品、场景和风险点，工程师无需从头询问。" : customerComplete ? "信息已完整，可以提交；AI 将自动生成客户标签与销售跟进摘要。" : "继续补全公司与收货信息，缺失项不会被猜测或自动填写。"}</p>
+              <p className="ai-handoff-note"><b>{c("下一步：", "Next step: ")}</b>{engineering
+                ? c("该产品需要工程评审。请转入项目需求，当前产品与配置会一并提交。", "This product requires engineering review. Continue with a project request; the selected product and configuration will be included.")
+                : customerComplete
+                  ? c("信息已完整，可以提交采购意向，销售将确认价格、库存和交期。", "Your details are complete. Submit the purchase request and sales will confirm price, stock and lead time.")
+                  : c("请继续补全公司、联系人和收货信息。", "Complete the company, contact and delivery details.")}</p>
             </div>
             <div className="panel customer-panel">
               <div className="panel-heading">
-                <div><h2>公司与收货信息</h2><p>用于识别客户主体、区域分群、订单履约和长期服务跟进。</p></div>
-                <span>带 * 为必填</span>
+                <div><h2>{c("公司与收货信息", "Company and delivery details")}</h2><p>{c("用于联系确认采购需求、准备报价并评估发货安排。", "Used to confirm your request, prepare a quotation and assess delivery.")}</p></div>
+                <span>{c("带 * 为必填", "* Required")}</span>
               </div>
               <div className="config-fields">
                 <label>
-                  <span>公司名称 *</span>
-                  <input autoComplete="organization" value={customer.company} onChange={(e) => updateCustomer("company", e.target.value)} placeholder="公司完整名称" />
+                  <span>{c("公司名称 *", "Company name *")}</span>
+                  <input autoComplete="organization" value={customer.company} onChange={(e) => updateCustomer("company", e.target.value)} placeholder={c("公司完整名称", "Legal company name")} />
                 </label>
                 <label>
-                  <span>客户类型 *</span>
+                  <span>{c("公司类型 *", "Company type *")}</span>
                   <select value={customer.companyType} onChange={(e) => updateCustomer("companyType", e.target.value)}>
-                    <option>机器人整机厂商</option>
-                    <option>系统集成商</option>
-                    <option>高校 / 研究机构</option>
-                    <option>创新团队</option>
-                    <option>经销商 / 渠道伙伴</option>
-                    <option>其他</option>
+                    {["机器人整机厂商", "系统集成商", "高校 / 研究机构", "创新团队", "经销商 / 渠道伙伴", "其他"].map((item) => <option value={item} key={item}>{v(item)}</option>)}
                   </select>
                 </label>
                 <label>
-                  <span>联系人 *</span>
-                  <input autoComplete="name" value={customer.contact} onChange={(e) => updateCustomer("contact", e.target.value)} placeholder="姓名" />
+                  <span>{c("联系人 *", "Contact name *")}</span>
+                  <input autoComplete="name" value={customer.contact} onChange={(e) => updateCustomer("contact", e.target.value)} placeholder={c("姓名", "Full name")} />
                 </label>
                 <label>
-                  <span>手机 / 邮箱 *</span>
-                  <input autoComplete="email" value={customer.contactDetail} onChange={(e) => updateCustomer("contactDetail", e.target.value)} placeholder="便于订单确认与后续联系" />
+                  <span>{c("电话 / 邮箱 *", "Phone / email *")}</span>
+                  <input autoComplete="email" value={customer.contactDetail} onChange={(e) => updateCustomer("contactDetail", e.target.value)} placeholder={c("用于确认采购需求", "For purchase-request confirmation")} />
                 </label>
                 <label>
-                  <span>国家 / 地区 *</span>
-                  <input autoComplete="country-name" value={customer.country} onChange={(e) => updateCustomer("country", e.target.value)} placeholder="例如：中国、德国" />
+                  <span>{c("国家 / 地区 *", "Country / region *")}</span>
+                  <input autoComplete="country-name" value={customer.country} onChange={(e) => updateCustomer("country", e.target.value)} placeholder={c("例如：中国、德国", "e.g. Germany, United States")} />
                 </label>
                 <label>
-                  <span>省 / 州 / 城市 *</span>
-                  <input autoComplete="address-level2" value={customer.city} onChange={(e) => updateCustomer("city", e.target.value)} placeholder="例如：上海市嘉定区" />
+                  <span>{c("省 / 州 / 城市 *", "State / province / city *")}</span>
+                  <input autoComplete="address-level2" value={customer.city} onChange={(e) => updateCustomer("city", e.target.value)} placeholder={c("例如：上海市嘉定区", "e.g. Munich, Bavaria")} />
                 </label>
                 <label className="full-field">
-                  <span>详细地址 *</span>
-                  <input autoComplete="street-address" value={customer.address} onChange={(e) => updateCustomer("address", e.target.value)} placeholder="街道、门牌号、楼宇及房间号" />
+                  <span>{c("详细地址 *", "Street address *")}</span>
+                  <input autoComplete="street-address" value={customer.address} onChange={(e) => updateCustomer("address", e.target.value)} placeholder={c("街道、门牌号、楼宇及房间号", "Street, building and suite")} />
                 </label>
                 <label>
-                  <span>邮政编码</span>
-                  <input autoComplete="postal-code" value={customer.postalCode} onChange={(e) => updateCustomer("postalCode", e.target.value)} placeholder="选填" />
+                  <span>{c("邮政编码", "Postal code")}</span>
+                  <input autoComplete="postal-code" value={customer.postalCode} onChange={(e) => updateCustomer("postalCode", e.target.value)} placeholder={c("选填", "Optional")} />
                 </label>
               </div>
-              <div className="tracking-note"><span>CRM</span><p><b>客户档案标签将自动生成</b>：{customer.companyType} · {customer.country || "待填写地区"} · 标准件客户，便于销售按客户类型和区域筛选、合并历史订单并持续跟进。</p></div>
+              <div className="tracking-note"><span>✓</span><p><b>{c("信息用途说明", "How your details are used")}</b>：{c("我们会将本次采购意向与贵公司的历史咨询关联，避免重复沟通，并用于后续报价与服务。", "We link this request with your company’s previous enquiries to avoid repeated questions and support quotation and follow-up service.")}</p></div>
             </div>
             <div className={engineering ? "engineer-warning" : "ai-explanation"}>
               <span>{engineering ? "!" : "AI"}</span>
               <div>
-                <h3>{engineering ? "需要工程师确认" : "AI 配置解释"}</h3>
+                <h3>{engineering ? c("提交前需要工程师确认", "Engineering confirmation required") : c("当前配置说明", "Configuration note")}</h3>
                 <p>{engineering
-                  ? "nRB-H1 当前处于初步工程状态，散热、功耗、机械安装和 EtherCAT 组合需按整机方案复核。"
-                  : `${primaryInterface} 已按产品资料纳入配置。${qty > 10 ? "数量超过 10 件，系统将自动提醒销售确认批量价格、库存和交期。" : "当前数量可提交采购意向，正式价格与交期仍需确认。"}`}</p>
-                {engineering && <button onClick={onCustom}>转为定制需求，与工程师联合评估 →</button>}
+                  ? c("该产品处于初步工程状态，散热、功耗、机械安装和 EtherCAT 组合需结合整机方案复核。", "This product is at a preliminary engineering stage. Thermal design, power, mechanical installation and EtherCAT combinations must be reviewed against the complete system.")
+                  : locale === "zh"
+                    ? `${primaryInterface} 已纳入配置。${qty > 10 ? "批量需求将由销售确认阶梯价格、库存和交期。" : "当前数量可提交采购意向，正式价格与交期仍需确认。"}`
+                    : `${v(primaryInterface)} is included in the configuration. ${qty > 10 ? "Sales will confirm volume pricing, stock and lead time." : "You can submit this quantity as a purchase request; formal pricing and lead time still need confirmation."}`}</p>
+                {engineering && <button onClick={onCustom}>{c("提交项目需求，申请联合评估", "Submit a project request for joint review")} →</button>}
               </div>
             </div>
           </div>
           <aside className="order-summary">
-            <span className="summary-label">配置摘要</span>
+            <span className="summary-label">{c("采购意向摘要", "Purchase request summary")}</span>
             <img src={selected.image} alt="" />
             <small>{selected.model}</small>
-            <h2>{selected.name}</h2>
+            <h2>{v(selected.name)}</h2>
             <dl>
-              {selected.configuration.slice(0, 3).map((item) => <div key={item.key}><dt>{item.label.replace(" *", "")}</dt><dd>{configuration[item.key]}</dd></div>)}
-              <div><dt>数量</dt><dd>{qty} 件</dd></div><div><dt>交期</dt><dd>{selected.lead}</dd></div>
+              {selected.configuration.slice(0, 3).map((item) => <div key={item.key}><dt>{stripRequiredMark(v(item.label))}</dt><dd>{v(configuration[item.key])}</dd></div>)}
+              <div><dt>{c("数量", "Quantity")}</dt><dd>{qty} {c("件", "pcs")}</dd></div><div><dt>{c("交期", "Lead time")}</dt><dd>{v(selected.lead)}</dd></div>
             </dl>
-            <div className="price-row"><span>预估金额</span><strong>{total ? `¥${total.toLocaleString()}` : "工程确认后报价"}</strong></div>
-            <p className="small-note">{customerComplete ? `客户：${customer.company} · ${customerLocation}` : "请完整填写公司、联系人和收货地址后提交。"}价格与交期为原型演示信息，最终以正式订单或报价单为准。</p>
-            <button className="primary-button full" disabled={engineering || !customerComplete} onClick={submitStandardOrder}>提交采购意向 →</button>
-            {engineering && <button className="outline-button full" onClick={onCustom}>提交询价需求</button>}
+            <div className="price-row"><span>{c("价格", "Price")}</span><strong>{total ? `¥${total.toLocaleString()}` : c("提交后确认", "Confirmed after review")}</strong></div>
+            <p className="small-note">{customerComplete
+              ? locale === "zh" ? `客户：${customer.company} · ${customerLocation}。` : `Customer: ${customer.company} · ${customerLocation}. `
+              : c("请完整填写公司、联系人和收货地址后提交。", "Complete the company, contact and delivery details before submitting. ")}
+              {c("页面信息不构成正式报价，最终以 JOYNEXT 报价单或订单确认为准。", "Information shown here is not a formal quotation. Final terms are subject to a JOYNEXT quotation or order confirmation.")}</p>
+            <button className="primary-button full" disabled={engineering || !customerComplete} onClick={submitStandardOrder}>{c("提交采购意向", "Submit purchase request")} →</button>
+            {engineering && <button className="outline-button full" onClick={onCustom}>{c("申请工程评估", "Request engineering review")}</button>}
           </aside>
         </section>
       )}
       {step === 3 && (
         <section className="confirmation">
           <div className="success-mark">✓</div>
-          <span>ORDER CREATED</span>
-          <h1>标准件订单已生成</h1>
-          <p>订单号 <b>{orderId}</b>，已完成评分并进入销售线索队列。</p>
+          <span>PURCHASE REQUEST RECEIVED</span>
+          <h1>{c("采购意向已提交", "Purchase request submitted")}</h1>
+          <p>{c("询价编号", "Reference")} <b>{orderId}</b>。{c("销售将联系您确认正式价格、库存、交期和订单信息。", "Sales will contact you to confirm formal pricing, stock, lead time and order details.")}</p>
           <div className="confirmation-card">
-            <div><small>产品</small><strong>{selected.model} · {selected.name}</strong></div>
-            <div><small>数量</small><strong>{qty} 件</strong></div>
-            <div><small>关键配置</small><strong>{primaryInterface}</strong></div>
-            <div><small>预计发货</small><strong>{selected.lead}</strong></div>
+            <div><small>{c("产品", "Product")}</small><strong>{selected.model} · {v(selected.name)}</strong></div>
+            <div><small>{c("数量", "Quantity")}</small><strong>{qty} {c("件", "pcs")}</strong></div>
+            <div><small>{c("关键配置", "Key configuration")}</small><strong>{v(primaryInterface)}</strong></div>
+            <div><small>{c("交期状态", "Lead-time status")}</small><strong>{v(selected.lead)}</strong></div>
           </div>
           <div className="customer-profile-card">
-            <div className="customer-profile-heading"><span>客户档案与销售跟进摘要</span><b>已进入标准件客户队列</b></div>
+            <div className="customer-profile-heading"><span>{c("联系与收货信息", "Contact and delivery details")}</span><b>{c("已随采购意向提交", "Submitted with your request")}</b></div>
             <div className="customer-profile-grid">
-              <div><small>公司主体</small><strong>{customer.company}</strong><span>{customer.companyType}</span></div>
-              <div><small>联系人</small><strong>{customer.contact}</strong><span>{customer.contactDetail}</span></div>
-              <div><small>客户区域</small><strong>{customerLocation}</strong><span>{customer.postalCode ? `邮编 ${customer.postalCode}` : "未填写邮编"}</span></div>
-              <div><small>收货地址</small><strong>{customer.address}</strong><span>用于订单履约与区域服务分配</span></div>
+              <div><small>{c("公司", "Company")}</small><strong>{customer.company}</strong><span>{v(customer.companyType)}</span></div>
+              <div><small>{c("联系人", "Contact")}</small><strong>{customer.contact}</strong><span>{customer.contactDetail}</span></div>
+              <div><small>{c("国家 / 城市", "Country / city")}</small><strong>{customerLocation}</strong><span>{customer.postalCode ? `${c("邮编", "Postal code")} ${customer.postalCode}` : c("未填写邮编", "No postal code")}</span></div>
+              <div><small>{c("收货地址", "Delivery address")}</small><strong>{customer.address}</strong><span>{c("用于评估发货与区域服务安排", "Used to assess shipping and regional service")}</span></div>
             </div>
-            <p>系统将以公司主体和联系方式匹配历史询盘与订单，并按“{customer.companyType} / {customer.country} / 标准件客户”标签支持销售筛选和长期追踪。</p>
+            <p>{c("后续咨询将与贵公司的本次记录关联，避免重复提供相同信息。", "Future enquiries will be linked to this company record so you do not need to provide the same information again.")}</p>
           </div>
-          <div className="sales-timeline"><div className="done"><span>✓</span><b>订单提交</b></div><i /><div className="active"><span>2</span><b>销售确认</b></div><i /><div><span>3</span><b>备货发出</b></div></div>
+          <div className="sales-timeline"><div className="done"><span>✓</span><b>{c("意向提交", "Request sent")}</b></div><i /><div className="active"><span>2</span><b>{c("销售确认", "Sales review")}</b></div><i /><div><span>3</span><b>{c("报价与订单", "Quote & order")}</b></div></div>
           <div className="confirmation-actions">
-            <button className="outline-button" onClick={onComplete}>返回首页</button>
-            <button className="primary-button" onClick={onViewOperations}>查看销售跟进状态 →</button>
+            <button className="outline-button" onClick={onComplete}>{c("返回首页", "Back to homepage")}</button>
+            <button className="primary-button" onClick={() => onAskAi(c("我已经提交采购意向，请告诉我接下来需要准备哪些信息。", "I have submitted a purchase request. What information should I prepare next?"))}>{c("咨询下一步", "Ask about next steps")} →</button>
           </div>
         </section>
       )}
@@ -1053,74 +1153,82 @@ function CustomFlow({
   onHome,
   onComplete,
   onLeadCreated,
-  onViewOperations,
   brief,
   onAskAi,
 }: {
   onHome: () => void;
   onComplete: () => void;
   onLeadCreated: (lead: LeadRecord) => void;
-  onViewOperations: () => void;
   brief: DiscoveryBrief;
   onAskAi: (prompt: string) => void;
 }) {
+  const { locale, c, v } = useClientCopy();
   const [submitted, setSubmitted] = useState(false);
   const [priority, setPriority] = useState("常规");
+  const [attachments, setAttachments] = useState<string[]>([]);
   const [createdLead, setCreatedLead] = useState<LeadRecord | null>(null);
   const [form, setForm] = useState({
     project: "", company: "", contact: "", phone: "", country: "中国", scene: brief.scene,
     volume: "", stage: brief.stage === "概念设计" ? "概念设计" : brief.stage, target: "3 个月内", need: "",
   });
   const update = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
-  const priceEstimate = estimateCustomPrice(form.scene, form.stage, priority, form.need);
+  const priceEstimate = estimateCustomPrice(form.scene, form.stage, priority, form.need, locale);
   const requirementChecks = [
-    { label: "任务目标", done: form.need.trim().length >= 18 },
-    { label: "接口 / 平台", done: /接口|EtherCAT|CAN|USB|RS485|平台|控制器/i.test(form.need) },
-    { label: "环境 / 空间", done: /环境|温度|防护|安装|尺寸|空间|户外|室内/i.test(form.need) },
-    { label: "数量 / 时间", done: Boolean(form.volume.trim()) && form.target !== "待确认" },
+    { label: c("任务目标", "Task"), done: form.need.trim().length >= 18 },
+    { label: c("接口 / 平台", "Interface / platform"), done: /接口|EtherCAT|CAN|USB|RS485|平台|控制器|interface|platform|controller/i.test(form.need) },
+    { label: c("环境 / 空间", "Environment / space"), done: /环境|温度|防护|安装|尺寸|空间|户外|室内|environment|temperature|protection|mount|dimension|space|outdoor|indoor/i.test(form.need) },
+    { label: c("数量 / 时间", "Quantity / timing"), done: Boolean(form.volume.trim()) && form.target !== "待确认" },
   ];
   const requirementCompleteness = Math.round(requirementChecks.filter((item) => item.done).length / requirementChecks.length * 100);
-  const requirementFragments = form.scene === "AMR / AGV"
-    ? ["补充导航速度、避障距离和视场要求", "说明已有控制器及传感器接口", "补充仓库光照、粉尘和温度范围"]
-    : form.scene === "人形机器人"
-      ? ["补充控制周期、关节数量和算力需求", "说明整机功耗、散热与安装空间", "补充姿态精度、动态范围和安全约束"]
-      : ["补充任务节拍、精度和工作距离", "说明已有平台、通信接口和安装方式", "补充环境、防护等级与认证要求"];
+  const requirementFragments = locale === "en"
+    ? form.scene === "AMR / AGV"
+      ? ["Add navigation speed, obstacle range and field-of-view needs", "Describe the existing controller and sensor interfaces", "Add warehouse lighting, dust and temperature range"]
+      : form.scene === "人形机器人"
+        ? ["Add control cycle, joint count and compute needs", "Describe system power, cooling and installation space", "Add attitude accuracy, dynamic range and safety constraints"]
+        : ["Add cycle time, accuracy and working range", "Describe the existing platform, interfaces and mounting", "Add environment, protection rating and certification needs"]
+    : form.scene === "AMR / AGV"
+      ? ["补充导航速度、避障距离和视场要求", "说明已有控制器及传感器接口", "补充仓库光照、粉尘和温度范围"]
+      : form.scene === "人形机器人"
+        ? ["补充控制周期、关节数量和算力需求", "说明整机功耗、散热与安装空间", "补充姿态精度、动态范围和安全约束"]
+        : ["补充任务节拍、精度和工作距离", "说明已有平台、通信接口和安装方式", "补充环境、防护等级与认证要求"];
 
   const addRequirementFragment = (fragment: string) => {
     setForm((current) => ({
       ...current,
-      need: `${current.need}${current.need.trim() ? "；" : ""}${fragment}：`,
+      need: `${current.need}${current.need.trim() ? (locale === "en" ? "; " : "；") : ""}${fragment}${locale === "en" ? ": " : "："}`,
     }));
   };
 
   if (submitted) {
     return (
       <main className="flow-shell">
-        <div className="flow-bar"><button className="back-button" onClick={onHome}>← 返回产品中心</button><Progress step={3} custom /><span className="service-badge"><i /> 已分配销售</span></div>
+        <div className="flow-bar"><button className="back-button" onClick={onHome}>← {c("返回产品中心", "Back to products")}</button><Progress step={3} custom /><span className="service-badge"><i /> {c("已提交", "Submitted")}</span></div>
         <section className="confirmation custom-confirmation">
-          <div className="success-mark">✓</div><span>CUSTOM REQUEST RECEIVED</span><h1>定制需求已提交</h1>
-          <p>需求单号 <b>{createdLead?.id}</b>，系统评分 <b>{createdLead?.score} / 100</b>，已分流至{createdLead?.route}队列。</p>
+          <div className="success-mark">✓</div><span>PROJECT REQUEST RECEIVED</span><h1>{c("项目需求已提交", "Project request submitted")}</h1>
+          <p>{c("需求编号", "Reference")} <b>{createdLead?.id}</b>。{c("我们会根据技术复杂度安排销售或工程师与您联系。", "We will assign sales or engineering support based on the technical complexity.")}</p>
           <div className="lead-summary">
-            <div><small>负责人</small><strong>机器人业务销售组</strong><span>预计 2 小时内首次联系</span></div>
-            <div><small>技术协同</small><strong>域控制器与感知团队</strong><span>工程师已收到结构化摘要</span></div>
-            <div><small>约定单据</small><strong>报价单 + 初步工期单</strong><span>2 个工作日内生成</span></div>
+            <div><small>{c("商务联系", "Commercial contact")}</small><strong>{c("机器人业务销售团队", "Robotics sales team")}</strong><span>{c("预计 2 小时内首次联系", "First contact expected within 2 hours")}</span></div>
+            <div><small>{c("技术支持", "Technical support")}</small><strong>{c("按需求匹配工程团队", "Matched engineering team")}</strong><span>{c("技术条件已随需求提交", "Technical details included in the request")}</span></div>
+            <div><small>{c("后续文件", "Next documents")}</small><strong>{c("正式报价与初步计划", "Formal quote and initial plan")}</strong><span>{c("预计 2 个工作日内提供", "Expected within 2 business days")}</span></div>
           </div>
           <div className="summary-document">
-            <div><span>AI 结构化摘要</span><b>已发送给销售与技术人员</b></div>
-            <p>{form.company || "客户"}计划在{form.scene}场景中推进“{form.project || "未命名项目"}”，预计需求量 {form.volume || "待确认"}。核心需求：{form.need || "待销售进一步澄清"}。</p>
+            <div><span>{c("您提交的需求摘要", "Your request summary")}</span><b>{c("已交给销售与技术人员", "Shared with sales and engineering")}</b></div>
+            <p>{locale === "zh"
+              ? `${form.company || "客户"}计划在${form.scene}场景中推进“${form.project || "未命名项目"}”，预计需求量 ${form.volume || "待确认"}。核心需求：${form.need || "待进一步沟通"}。`
+              : `${form.company || "The customer"} is planning “${form.project || "Untitled project"}” for a ${v(form.scene)} application, with an expected volume of ${form.volume || "to be confirmed"}. Core requirements: ${form.need || "to be discussed"}.`}</p>
           </div>
           <div className="custom-price-estimate">
             <div className="price-estimate-heading">
-              <div><span>PRELIMINARY ESTIMATE</span><h2>初步方案价格区间</h2></div>
+              <div><span>PRELIMINARY ESTIMATE</span><h2>{c("初步方案价格区间", "Preliminary solution range")}</h2></div>
               <strong>{priceEstimate.label}</strong>
             </div>
-            <p>当前区间按定制方案的初步工程评估、适配开发和样机准备估算，参考因素包括：</p>
+            <p>{c("该区间根据初步工程评估、适配开发和样机准备估算，参考因素包括：", "This range is estimated from preliminary engineering, adaptation work and prototype preparation, including:")}</p>
             <div className="estimate-factors">{priceEstimate.reasons.map((reason) => <span key={reason}>✓ {reason}</span>)}</div>
-            <div className="estimate-disclaimer"><b>仅供参考，不构成正式报价</b><span>实际价格会受到最终配置、技术边界、样品数量、开发投入、测试认证和交付周期影响，具体价格可与 JOYNEXT 销售进一步沟通确认。</span></div>
+            <div className="estimate-disclaimer"><b>{c("仅供参考，不构成正式报价", "For reference only; not a formal quotation")}</b><span>{c("实际价格受最终配置、技术边界、样品数量、开发投入、测试认证和交付周期影响，请与 JOYNEXT 销售确认。", "Actual pricing depends on final configuration, technical scope, sample quantity, development effort, testing, certification and delivery timing. Please confirm with JOYNEXT sales.")}</span></div>
           </div>
           <div className="confirmation-actions">
-            <button className="outline-button" onClick={onComplete}>完成并返回首页</button>
-            <button className="primary-button" onClick={onViewOperations}>进入线索工作台 →</button>
+            <button className="outline-button" onClick={onComplete}>{c("返回首页", "Back to homepage")}</button>
+            <button className="primary-button" onClick={() => onAskAi(c("我已经提交项目需求，请告诉我接下来需要准备哪些技术资料。", "I have submitted a project request. What technical information should I prepare next?"))}>{c("咨询下一步", "Ask about next steps")} →</button>
           </div>
         </section>
       </main>
@@ -1160,7 +1268,7 @@ function CustomFlow({
       scene: form.scene,
       stage: form.stage,
       target: form.target,
-      need: `${form.project}：${form.need}`,
+      need: `${form.project}：${form.need}${attachments.length ? `；附件：${attachments.join("、")}` : ""}`,
       address: `${form.country}（详细地址待补充）`,
       nextAction: route.includes("工程") ? "销售首联并安排工程师完成接口、环境和系统边界评审。" : "销售联系客户，补充预算、数量和目标时间。",
       estimatedPrice: priceEstimate.label,
@@ -1173,73 +1281,88 @@ function CustomFlow({
 
   return (
     <main className="flow-shell">
-      <div className="flow-bar"><button className="back-button" onClick={onHome}>← 返回产品中心</button><Progress step={2} custom /><span className="service-badge"><i /> 销售在线</span></div>
+      <div className="flow-bar"><button className="back-button" onClick={onHome}>← {c("返回产品中心", "Back to products")}</button><Progress step={2} custom /><span className="service-badge"><i /> {c("可咨询销售", "Sales support")}</span></div>
       <section className="custom-layout">
         <div className="custom-main">
-          <div className="flow-title"><span>CUSTOM SOLUTION PATH</span><h1>提交定制需求</h1><p>已带入“{brief.scene} · {brief.goal}”上下文。用业务语言描述任务即可，AI 会边填写边补全工程评估所需信息。</p></div>
+          <div className="flow-title"><span>PROJECT REQUIREMENTS</span><h1>{c("描述项目，申请方案评估", "Describe your project for solution review")}</h1><p>{locale === "zh"
+            ? `当前选择：${brief.scene} · ${brief.goal}。请提供用途、接口、环境、安装条件、数量与目标时间，便于销售和工程师判断候选产品与工作范围。`
+            : `Current selection: ${v(brief.scene)} · ${v(brief.goal)}. Add the application, interfaces, environment, installation constraints, quantity and timing so sales and engineering can assess suitable products and scope.`}</p></div>
           <form className="custom-form" onSubmit={submit}>
             <div className="form-section">
-              <div className="form-section-title"><span>01</span><div><h2>项目与场景</h2><p>帮助我们判断对应的销售与工程团队。</p></div></div>
+              <div className="form-section-title"><span>01</span><div><h2>{c("项目与应用条件", "Project and application")}</h2><p>{c("用于初步判断产品方向和需要参与的专业人员。", "Used to identify product directions and the specialists needed for review.")}</p></div></div>
               <div className="form-grid">
-                <label><span>项目名称 *</span><input required value={form.project} onChange={(e) => update("project", e.target.value)} placeholder="例如：仓储 AMR 视觉升级" /></label>
-                <label><span>机器人场景 *</span><select value={form.scene} onChange={(e) => update("scene", e.target.value)}><option>人形机器人</option><option>AMR / AGV</option><option>协作机械臂</option><option>服务机器人</option><option>其他</option></select></label>
-                <label className="full-field"><span>需求描述 *</span><textarea required value={form.need} onChange={(e) => update("need", e.target.value)} placeholder="请描述任务目标、已有平台、关键指标、接口、安装空间、环境约束和期望交付时间…" /></label>
+                <label><span>{c("项目名称 *", "Project name *")}</span><input required value={form.project} onChange={(e) => update("project", e.target.value)} placeholder={c("例如：仓储 AMR 视觉升级", "e.g. Warehouse AMR vision upgrade")} /></label>
+                <label><span>{c("机器人类型 *", "Robot type *")}</span><select value={form.scene} onChange={(e) => update("scene", e.target.value)}>{["人形机器人", "AMR / AGV", "协作机械臂", "服务机器人", "其他"].map((scene) => <option value={scene} key={scene}>{v(scene)}</option>)}</select></label>
+                <label className="full-field"><span>{c("需求描述 *", "Requirement description *")}</span><textarea required value={form.need} onChange={(e) => update("need", e.target.value)} placeholder={c("请描述任务目标、已有平台、关键指标、接口、安装空间、环境约束和期望交付时间…", "Describe the task, existing platform, key targets, interfaces, installation space, environment and desired timing…")} /></label>
               </div>
               <div className="ai-requirement-coach" aria-live="polite">
-                <div className="requirement-score"><span>AI</span><p><small>需求可评估度</small><strong>{requirementCompleteness}%</strong></p><i><b style={{ width: `${requirementCompleteness}%` }} /></i></div>
+                <div className="requirement-score"><span>AI</span><p><small>{c("信息完整度", "Information completeness")}</small><strong>{requirementCompleteness}%</strong></p><i><b style={{ width: `${requirementCompleteness}%` }} /></i></div>
                 <div className="requirement-checks">
                   {requirementChecks.map((item) => <span className={item.done ? "done" : ""} key={item.label}>{item.done ? "✓" : "+"} {item.label}</span>)}
                 </div>
                 <div className="requirement-prompts">
-                  <small>点击补充建议，直接续写到需求描述</small>
+                  <small>{c("点击提示，将待补充内容加入需求描述", "Click a prompt to add the missing topic to your description")}</small>
                   <div>{requirementFragments.map((fragment) => <button type="button" key={fragment} onClick={() => addRequirementFragment(fragment)}>{fragment}</button>)}</div>
                 </div>
-                <p><b>AI 当前理解：</b>{form.need.trim() ? `${form.scene}项目，重点围绕${brief.goal}；已识别 ${requirementChecks.filter((item) => item.done).map((item) => item.label).join("、") || "基础场景"}，未填写内容会保留为待销售澄清。` : "先描述任务目标，AI 会实时标出工程评估仍缺少的信息，不会猜测关键参数。"}</p>
+                <p><b>{c("当前信息检查：", "Current information check: ")}</b>{form.need.trim()
+                  ? locale === "zh"
+                    ? `${form.scene}项目，主要用于${brief.goal}；已包含 ${requirementChecks.filter((item) => item.done).map((item) => item.label).join("、") || "基础场景"}，其余内容需要后续确认。`
+                    : `${v(form.scene)} project for ${v(brief.goal)}; captured: ${requirementChecks.filter((item) => item.done).map((item) => item.label).join(", ") || "basic application"}. Remaining items still need confirmation.`
+                  : c("请先描述任务目标。填写过程中会提示工程评估仍缺少的信息，不会自动猜测关键参数。", "Start with the task. Missing information for engineering review will be highlighted without guessing key parameters.")}</p>
               </div>
             </div>
             <div className="form-section">
-              <div className="form-section-title"><span>02</span><div><h2>商务与联系信息</h2><p>用于生成报价、工期评估和后续沟通。</p></div></div>
+              <div className="form-section-title"><span>02</span><div><h2>{c("采购与联系信息", "Purchasing and contact details")}</h2><p>{c("用于准备报价、评估数量与交付时间，并安排后续沟通。", "Used to prepare a quote, assess volume and timing, and arrange follow-up.")}</p></div></div>
               <div className="form-grid">
-                <label><span>公司名称 *</span><input required value={form.company} onChange={(e) => update("company", e.target.value)} placeholder="公司全称" /></label>
-                <label><span>预计年用量</span><input value={form.volume} onChange={(e) => update("volume", e.target.value)} placeholder="例如：100–500 套 / 年" /></label>
-                <label><span>联系人 *</span><input required value={form.contact} onChange={(e) => update("contact", e.target.value)} placeholder="姓名" /></label>
-                <label><span>手机 / 邮箱 *</span><input required value={form.phone} onChange={(e) => update("phone", e.target.value)} placeholder="便于销售联系" /></label>
-                <label><span>国家 / 地区 *</span><input required value={form.country} onChange={(e) => update("country", e.target.value)} placeholder="例如：中国、德国" /></label>
-                <label><span>项目阶段 *</span><select value={form.stage} onChange={(e) => update("stage", e.target.value)}><option>概念设计</option><option>Demo / 样机</option><option>样机验证</option><option>小批量验证</option><option>量产导入</option></select></label>
-                <label><span>目标时间 *</span><select value={form.target} onChange={(e) => update("target", e.target.value)}><option>1 个月内</option><option>3 个月内</option><option>6 个月内</option><option>12 个月内</option><option>待确认</option></select></label>
+                <label><span>{c("公司名称 *", "Company name *")}</span><input required value={form.company} onChange={(e) => update("company", e.target.value)} placeholder={c("公司全称", "Legal company name")} /></label>
+                <label><span>{c("预计用量", "Expected volume")}</span><input value={form.volume} onChange={(e) => update("volume", e.target.value)} placeholder={c("例如：100–500 套 / 年", "e.g. 100–500 units / year")} /></label>
+                <label><span>{c("联系人 *", "Contact name *")}</span><input required value={form.contact} onChange={(e) => update("contact", e.target.value)} placeholder={c("姓名", "Full name")} /></label>
+                <label><span>{c("电话 / 邮箱 *", "Phone / email *")}</span><input required value={form.phone} onChange={(e) => update("phone", e.target.value)} placeholder={c("用于销售联系", "For sales follow-up")} /></label>
+                <label><span>{c("国家 / 地区 *", "Country / region *")}</span><input required value={form.country} onChange={(e) => update("country", e.target.value)} placeholder={c("例如：中国、德国", "e.g. Germany, United States")} /></label>
+                <label><span>{c("项目阶段 *", "Project stage *")}</span><select value={form.stage} onChange={(e) => update("stage", e.target.value)}>{["概念设计", "Demo / 样机", "样机验证", "小批量验证", "量产导入"].map((stage) => <option value={stage} key={stage}>{v(stage)}</option>)}</select></label>
+                <label><span>{c("期望时间 *", "Required timing *")}</span><select value={form.target} onChange={(e) => update("target", e.target.value)}>{["1 个月内", "3 个月内", "6 个月内", "12 个月内", "待确认"].map((target) => <option value={target} key={target}>{v(target)}</option>)}</select></label>
               </div>
             </div>
             <div className="form-section">
-              <div className="form-section-title"><span>03</span><div><h2>优先级与附件</h2><p>附件将在下一版接入真实上传；本版演示结构与状态。</p></div></div>
+              <div className="form-section-title"><span>03</span><div><h2>{c("项目节奏与参考资料", "Project timing and reference files")}</h2><p>{c("选择项目节奏；如有规格书、图纸或 BOM，可一并附上文件名供后续沟通。", "Select the project timing and add specifications, drawings or a BOM to support follow-up.")}</p></div></div>
               <div className="priority-row">
-                {["常规", "紧急样机", "量产项目"].map((item) => <button type="button" className={priority === item ? "priority active" : "priority"} key={item} onClick={() => setPriority(item)}><span>{item === "常规" ? "○" : item === "紧急样机" ? "⚡" : "▦"}</span><b>{item}</b><small>{item === "常规" ? "2 个工作日内给出初步单据" : item === "紧急样机" ? "销售优先联系并确认资源" : "进入项目评审与量产导入"}</small></button>)}
+                {["常规", "紧急样机", "量产项目"].map((item) => <button type="button" className={priority === item ? "priority active" : "priority"} key={item} onClick={() => setPriority(item)}><span>{item === "常规" ? "○" : item === "紧急样机" ? "⚡" : "▦"}</span><b>{v(item)}</b><small>{item === "常规"
+                  ? c("常规评估与联系节奏", "Standard review and response")
+                  : item === "紧急样机"
+                    ? c("优先确认样机资源与时间", "Priority check of prototype resources and timing")
+                    : c("评估量产导入、验证与供货计划", "Review production launch, validation and supply planning")}</small></button>)}
               </div>
-              <div className="upload-box"><span>⇧</span><div><b>拖放需求文档、图纸或 BOM</b><small>支持 PDF、PPT、STEP、Excel · 原型演示</small></div><button type="button">选择文件</button></div>
+              <div className="upload-box"><span>⇧</span><div><b>{attachments.length ? attachments.join(" · ") : c("添加需求文档、图纸或 BOM", "Add specifications, drawings or a BOM")}</b><small>{c("支持 PDF、PPT、STEP、Excel；文件将在销售联系时进一步确认", "PDF, PPT, STEP and Excel; files will be confirmed during sales follow-up")}</small></div><label className="upload-trigger">{c("选择文件", "Choose files")}<input type="file" multiple accept=".pdf,.ppt,.pptx,.step,.stp,.xls,.xlsx" onChange={(event) => setAttachments(Array.from(event.target.files ?? []).map((file) => file.name))} /></label></div>
             </div>
-            <label className="consent"><input required type="checkbox" /> 我确认以上信息可用于本次商务与技术评估。</label>
-            <div className="form-submit"><div><span className="live-dot" />销售部门在线</div><button className="primary-button" type="submit">提交需求并生成跟进单 →</button></div>
+            <label className="consent"><input required type="checkbox" /> {c("我同意 JOYNEXT 使用以上信息联系我并评估本次采购需求。", "I agree that JOYNEXT may use this information to contact me and evaluate this purchasing request.")}</label>
+            <div className="form-submit"><div><span className="live-dot" />{c("提交后由销售确认", "Sales will confirm after submission")}</div><button className="primary-button" type="submit">{c("提交项目需求", "Submit project request")} →</button></div>
           </form>
         </div>
         <aside className="custom-aside">
           <div className="live-estimate-card aside-estimate" aria-live="polite">
             <div className="live-estimate-main">
-              <div className="live-estimate-label"><span>AI</span><p><small>LIVE ESTIMATE</small><b>动态需求估价</b></p></div>
+              <div className="live-estimate-label"><span>AI</span><p><small>PRELIMINARY RANGE</small><b>{c("初步参考估价", "Preliminary estimate")}</b></p></div>
               <strong>{priceEstimate.label}</strong>
-              <p>根据当前场景、项目阶段、优先级和需求复杂度实时更新。</p>
+              <p>{c("根据机器人类型、项目阶段、项目节奏和需求复杂度估算。", "Estimated from robot type, project stage, timing and requirement complexity.")}</p>
             </div>
             <div className="live-estimate-detail">
               <div>{priceEstimate.reasons.map((reason) => <span key={reason}>✓ {reason}</span>)}</div>
-              <p><b>仅供参考，不构成正式报价。</b>具体价格受最终配置、开发投入、测试认证、数量和交期影响，可与 JOYNEXT 销售进一步沟通。</p>
+              <p><b>{c("仅供参考，不构成正式报价。", "For reference only; not a formal quotation. ")}</b>{c("具体价格受最终配置、开发投入、测试认证、数量和交期影响，请与 JOYNEXT 销售确认。", "Final pricing depends on configuration, development effort, testing, certification, quantity and lead time. Please confirm with JOYNEXT sales.")}</p>
             </div>
           </div>
           <button className="aside-ai-review" type="button" onClick={() => onAskAi(form.need.trim()
-            ? `请根据以下定制需求给出候选产品组合、缺失信息和工程风险：场景=${form.scene}；阶段=${form.stage}；需求=${form.need}`
-            : `请围绕${form.scene}和${brief.goal}目标，通过关键问题帮我补全一份可供工程师评估的需求描述。`)}>
-            <span>AI</span><p><b>{form.need.trim() ? "让 AI 评审当前需求" : "让 AI 帮我补全需求"}</b><small>调用真实产品知识库与业务边界</small></p><em>→</em>
+            ? locale === "zh" ? `请根据以下项目需求给出候选产品组合、缺失信息和工程风险：场景=${form.scene}；阶段=${form.stage}；需求=${form.need}` : `For this project request, suggest candidate products, missing information and engineering risks: application=${v(form.scene)}; stage=${v(form.stage)}; requirements=${form.need}`
+            : locale === "zh" ? `请围绕${form.scene}和${brief.goal}目标，通过关键问题帮我补全一份可供工程师评估的需求描述。` : `For ${v(form.scene)} and ${v(brief.goal)}, ask key questions to help me complete a requirement description for engineering review.`)}>
+            <span>AI</span><p><b>{form.need.trim() ? c("检查当前需求", "Review current requirements") : c("帮我补全需求", "Help complete requirements")}</b><small>{c("依据产品资料识别候选项与待确认内容", "Use product data to identify candidates and open questions")}</small></p><em>→</em>
           </button>
-          <div className="sales-card"><span className="live-dot" /><small>AI + SALES ONLINE</small><h3>上下文会随需求一起交接</h3><p>场景、目标、推荐产品、风险点和估价依据会形成同一份摘要，销售与工程师不再重复询问。</p><div className="avatar-row"><i>AI</i><i>销</i><i>技</i><span>智能整理 + 人工确认</span></div></div>
-          <div className="next-card"><h3>接下来会发生什么</h3>{[["1", "需求入队", "即时生成结构化摘要"], ["2", "销售首联", "预计 2 小时内"], ["3", "工程评估", "确认接口、风险与边界"], ["4", "单据生成", "2 个工作日内给出报价与工期"]].map(([n, h, p]) => <div key={n}><span>{n}</span><p><b>{h}</b><small>{p}</small></p></div>)}</div>
-          <div className="trust-card"><h3>资料边界</h3><p>AI 只整理和解释已提供资料。系统兼容、安全、法规与最终设计结论必须由工程师确认。</p></div>
+          <div className="sales-card"><span className="live-dot" /><small>SALES + ENGINEERING SUPPORT</small><h3>{c("已填写信息会随需求一起提交", "Your context stays with the request")}</h3><p>{c("场景、目标、候选产品、风险点和估价依据会整理到同一份摘要，减少后续重复沟通。", "Application, goals, candidate products, risks and estimate factors are kept in one summary to reduce repeated questions.")}</p><div className="avatar-row"><i>AI</i><i>{c("销", "S")}</i><i>{c("技", "E")}</i><span>{c("智能整理 + 专业确认", "Structured by AI + confirmed by specialists")}</span></div></div>
+          <div className="next-card"><h3>{c("提交后会发生什么", "What happens after submission")}</h3>{[
+            ["1", c("需求确认", "Request received"), c("生成需求编号与摘要", "Reference and summary created")],
+            ["2", c("销售联系", "Sales contact"), c("预计 2 小时内首次联系", "First contact expected within 2 hours")],
+            ["3", c("工程评估", "Engineering review"), c("确认接口、风险与技术边界", "Confirm interfaces, risks and technical scope")],
+            ["4", c("报价与计划", "Quote and plan"), c("预计 2 个工作日内提供", "Expected within 2 business days")],
+          ].map(([n, h, p]) => <div key={n}><span>{n}</span><p><b>{h}</b><small>{p}</small></p></div>)}</div>
+          <div className="trust-card"><h3>{c("信息边界", "Information boundary")}</h3><p>{c("页面建议仅依据已提供资料。系统兼容、安全、法规、正式价格与最终设计结论由销售或工程师确认。", "Website guidance only uses available documentation. Compatibility, safety, regulations, formal pricing and final design decisions require sales or engineering confirmation.")}</p></div>
         </aside>
       </section>
     </main>
@@ -1386,26 +1509,30 @@ function OperationsDashboard({
 }
 
 function Footer() {
+  const { c } = useClientCopy();
   return (
     <footer>
       <Logo inverse />
-      <p>JOYNEXT Robotics Components · 从场景到选型，从需求到成交。</p>
-      <div><a href="#products">产品</a><a href="#scenarios">场景</a><a href="#support">支持</a><span>© 2026 JOYNEXT Prototype</span></div>
+      <p>{c("JOYNEXT 机器人元器件 · 产品选型、询价与项目支持", "JOYNEXT Robotics Components · Selection, quotation and project support")}</p>
+      <div><a href="#products">{c("产品", "Products")}</a><a href="#scenarios">{c("应用", "Applications")}</a><a href="#support">{c("支持", "Support")}</a><span>© 2026 JOYNEXT</span></div>
     </footer>
   );
 }
 
 function FloatingOrderButton({ onClick }: { onClick: () => void }) {
+  const { c } = useClientCopy();
   return (
-    <button className="floating-order-button" onClick={onClick} aria-label="前往标准件订购位置">
+    <button className="floating-order-button" onClick={onClick} aria-label={c("前往产品采购入口", "Go to purchase options")}>
       <span>▣</span>
-      <span><small>STANDARD ORDER</small><b>立即订购</b></span>
+      <span><small>PURCHASE REQUEST</small><b>{c("提交采购意向", "Request a quote")}</b></span>
       <i>→</i>
     </button>
   );
 }
 
 export default function HomePage() {
+  const [locale, setLocale] = useState<ClientLocale>("zh");
+  const [localeReady, setLocaleReady] = useState(false);
   const [view, setView] = useState<View>("home");
   const [selected, setSelected] = useState(products.find((product) => product.id === "depth-48") ?? products[0]);
   const [brief, setBrief] = useState<DiscoveryBrief>({
@@ -1417,6 +1544,24 @@ export default function HomePage() {
   const [leadStoreReady, setLeadStoreReady] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantPrompt, setAssistantPrompt] = useState<AssistantPrompt | null>(null);
+
+  useEffect(() => {
+    const restore = window.setTimeout(() => {
+      const savedLocale = window.localStorage.getItem("joynext-client-locale");
+      if (savedLocale === "zh" || savedLocale === "en") setLocale(savedLocale);
+      setLocaleReady(true);
+    }, 0);
+    return () => window.clearTimeout(restore);
+  }, []);
+
+  useEffect(() => {
+    if (!localeReady) return;
+    window.localStorage.setItem("joynext-client-locale", locale);
+    document.documentElement.lang = locale === "en" ? "en" : "zh-CN";
+    document.title = locale === "en"
+      ? "JOYNEXT Robotics Components | Product Selection & RFQ"
+      : "JOYNEXT 机器人元器件选型与询价";
+  }, [locale, localeReady]);
 
   useEffect(() => {
     const restore = window.setTimeout(() => {
@@ -1476,16 +1621,18 @@ export default function HomePage() {
   };
 
   return (
-    <div>
-      <MotionEffects />
-      <Header onNavigate={navigate} onNavigateSection={navigateToSection} onOpenAssistant={() => openAssistant()} />
-      <AiJourneyRibbon view={view} brief={brief} selected={selected} onOpenAssistant={() => openAssistant()} />
-      {view === "home" && <Home onNavigate={navigate} onSelect={setSelected} brief={brief} onBriefChange={setBrief} onAskAi={openAssistant} />}
-      {view === "standard" && <StandardFlow selected={selected} onSelect={setSelected} onHome={() => navigate("home")} onCustom={() => navigate("custom")} onComplete={() => navigate("home")} onLeadCreated={addLead} onViewOperations={() => window.location.assign(withBasePath("/admin"))} brief={brief} onBriefChange={setBrief} onAskAi={openAssistant} />}
-      {view === "custom" && <CustomFlow onHome={() => navigate("home")} onComplete={() => navigate("home")} onLeadCreated={addLead} onViewOperations={() => window.location.assign(withBasePath("/admin"))} brief={brief} onAskAi={openAssistant} />}
-      {view === "home" && <Footer />}
-      {view === "home" && <FloatingOrderButton onClick={() => navigateToSection("standard-order")} />}
-      <AiAssistantDrawer open={assistantOpen} onClose={() => setAssistantOpen(false)} brief={brief} selected={selected} view={view} promptRequest={assistantPrompt} onSelectProduct={selectFromAssistant} />
-    </div>
+    <LocaleContext.Provider value={{ locale, setLocale }}>
+      <div>
+        <MotionEffects />
+        <Header onNavigate={navigate} onNavigateSection={navigateToSection} onOpenAssistant={() => openAssistant()} />
+        <BuyerNeedBar view={view} onOpenAssistant={() => openAssistant()} />
+        {view === "home" && <Home onNavigate={navigate} onSelect={setSelected} brief={brief} onBriefChange={setBrief} onAskAi={openAssistant} />}
+        {view === "standard" && <StandardFlow selected={selected} onSelect={setSelected} onHome={() => navigate("home")} onCustom={() => navigate("custom")} onComplete={() => navigate("home")} onLeadCreated={addLead} brief={brief} onBriefChange={setBrief} onAskAi={openAssistant} />}
+        {view === "custom" && <CustomFlow onHome={() => navigate("home")} onComplete={() => navigate("home")} onLeadCreated={addLead} brief={brief} onAskAi={openAssistant} />}
+        {view === "home" && <Footer />}
+        {view === "home" && <FloatingOrderButton onClick={() => navigateToSection("standard-order")} />}
+        <AiAssistantDrawer open={assistantOpen} onClose={() => setAssistantOpen(false)} brief={brief} selected={selected} view={view} promptRequest={assistantPrompt} onSelectProduct={selectFromAssistant} />
+      </div>
+    </LocaleContext.Provider>
   );
 }
