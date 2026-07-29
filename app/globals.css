@@ -324,7 +324,7 @@ main { display: block; }
 .sales-timeline .active span { background: var(--blue); }
 .sales-timeline i { width: 100px; height: 1px; background: #cbd6e4; margin: 0 12px 20px; }
 
-.custom-layout { max-width: 1184px; margin: auto; padding: 36px 28px 80px; display: grid; grid-template-columns: minmax(0, 1fr) 300px; gap: 22px; }
+.custom-layout { max-width: 1220px; margin: auto; padding: 36px 28px 80px; display: grid; grid-template-columns: minmax(0, 1fr) 330px; gap: 22px; }
 .custom-form { display: grid; gap: 16px; }
 .form-section { background: white; border: 1px solid var(--line); border-radius: 14px; padding: 22px; }
 .live-estimate-card { display: grid; grid-template-columns: minmax(230px, .8fr) 1.2fr; gap: 18px; color: white; background: radial-gradient(circle at 92% 0%, rgba(30,132,255,.42), transparent 38%), linear-gradient(135deg, #061a39, #08316c); border: 1px solid #245797; border-radius: 14px; padding: 20px; box-shadow: 0 14px 32px rgba(4,35,79,.14); }
@@ -379,6 +379,14 @@ main { display: block; }
 .consent { font-size: 11px; color: #5f6f84; display: flex; gap: 8px; align-items: center; }
 .form-submit { background: white; border: 1px solid var(--line); padding: 14px 18px; border-radius: 12px; display: flex; align-items: center; justify-content: space-between; font-size: 11px; }
 .custom-aside { display: grid; gap: 14px; align-content: start; position: sticky; top: 104px; }
+.aside-estimate { grid-template-columns: 1fr; gap: 14px; padding: 19px; }
+.aside-estimate .live-estimate-main { gap: 10px; padding: 0 0 15px; border-right: 0; border-bottom: 1px solid rgba(154,195,244,.24); }
+.aside-estimate .live-estimate-main > strong { font-size: 27px; }
+.aside-estimate .live-estimate-main > p { font-size: 9px; }
+.aside-estimate .live-estimate-detail { gap: 10px; }
+.aside-estimate .live-estimate-detail > div { display: grid; grid-template-columns: 1fr; }
+.aside-estimate .live-estimate-detail > div span { padding: 7px 8px; line-height: 1.45; }
+.aside-estimate .live-estimate-detail > p { font-size: 9px; }
 .sales-card, .next-card, .trust-card { border-radius: 13px; padding: 19px; }
 .sales-card { color: white; background: radial-gradient(circle at 90% 0%, #0b5bc0, transparent 40%), linear-gradient(145deg, #071a38, #0a2a5a); }
 .sales-card > small { color: #78b9ff; font-weight: 800; margin-left: 5px; }

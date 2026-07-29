@@ -997,17 +997,6 @@ function CustomFlow({
                 <p><b>AI 当前理解：</b>{form.need.trim() ? `${form.scene}项目，重点围绕${brief.goal}；已识别 ${requirementChecks.filter((item) => item.done).map((item) => item.label).join("、") || "基础场景"}，未填写内容会保留为待销售澄清。` : "先描述任务目标，AI 会实时标出工程评估仍缺少的信息，不会猜测关键参数。"}</p>
               </div>
             </div>
-            <div className="live-estimate-card" aria-live="polite">
-              <div className="live-estimate-main">
-                <div className="live-estimate-label"><span>AI</span><p><small>LIVE ESTIMATE</small><b>动态需求估价</b></p></div>
-                <strong>{priceEstimate.label}</strong>
-                <p>根据当前场景、项目阶段、优先级和需求复杂度实时更新。</p>
-              </div>
-              <div className="live-estimate-detail">
-                <div>{priceEstimate.reasons.map((reason) => <span key={reason}>✓ {reason}</span>)}</div>
-                <p><b>仅供参考，不构成正式报价。</b>具体价格受最终配置、开发投入、测试认证、数量和交期影响，可与 JOYNEXT 销售进一步沟通。</p>
-              </div>
-            </div>
             <div className="form-section">
               <div className="form-section-title"><span>02</span><div><h2>商务与联系信息</h2><p>用于生成报价、工期评估和后续沟通。</p></div></div>
               <div className="form-grid">
@@ -1032,6 +1021,17 @@ function CustomFlow({
           </form>
         </div>
         <aside className="custom-aside">
+          <div className="live-estimate-card aside-estimate" aria-live="polite">
+            <div className="live-estimate-main">
+              <div className="live-estimate-label"><span>AI</span><p><small>LIVE ESTIMATE</small><b>动态需求估价</b></p></div>
+              <strong>{priceEstimate.label}</strong>
+              <p>根据当前场景、项目阶段、优先级和需求复杂度实时更新。</p>
+            </div>
+            <div className="live-estimate-detail">
+              <div>{priceEstimate.reasons.map((reason) => <span key={reason}>✓ {reason}</span>)}</div>
+              <p><b>仅供参考，不构成正式报价。</b>具体价格受最终配置、开发投入、测试认证、数量和交期影响，可与 JOYNEXT 销售进一步沟通。</p>
+            </div>
+          </div>
           <div className="sales-card"><span className="live-dot" /><small>AI + SALES ONLINE</small><h3>上下文会随需求一起交接</h3><p>场景、目标、推荐产品、风险点和估价依据会形成同一份摘要，销售与工程师不再重复询问。</p><div className="avatar-row"><i>AI</i><i>销</i><i>技</i><span>智能整理 + 人工确认</span></div></div>
           <div className="next-card"><h3>接下来会发生什么</h3>{[["1", "需求入队", "即时生成结构化摘要"], ["2", "销售首联", "预计 2 小时内"], ["3", "工程评估", "确认接口、风险与边界"], ["4", "单据生成", "2 个工作日内给出报价与工期"]].map(([n, h, p]) => <div key={n}><span>{n}</span><p><b>{h}</b><small>{p}</small></p></div>)}</div>
           <div className="trust-card"><h3>资料边界</h3><p>AI 只整理和解释已提供资料。系统兼容、安全、法规与最终设计结论必须由工程师确认。</p></div>
