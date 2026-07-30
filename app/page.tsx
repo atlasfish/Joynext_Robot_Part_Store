@@ -155,6 +155,27 @@ function productPriceLabel(product: Product, locale: ClientLocale, quantity = 1)
   return locale === "en" ? "Quoted after review" : "评估后报价";
 }
 
+function configuredUnitPrice(product: Product, configuration: Record<string, string>) {
+  const range = standardUnitPriceRanges[product.id];
+  if (!range || !Object.keys(configuration).length) return null;
+  const optionRatios = product.configuration.map((field) => {
+    const selectedIndex = Math.max(0, field.options.indexOf(configuration[field.key]));
+    return field.options.length > 1 ? selectedIndex / (field.options.length - 1) : 0;
+  });
+  const optionFactor = optionRatios.length
+    ? optionRatios.reduce((total, ratio) => total + ratio, 0) / optionRatios.length
+    : 0;
+  const exactPrice = range.low + (range.high - range.low) * optionFactor;
+  return Math.round(exactPrice / 10) * 10;
+}
+
+function configuredPriceLabel(product: Product, configuration: Record<string, string>, locale: ClientLocale, quantity = 1) {
+  const unitPrice = configuredUnitPrice(product, configuration);
+  if (unitPrice === null) return productPriceLabel(product, locale, quantity);
+  const total = unitPrice * quantity;
+  return `${locale === "en" ? "RMB " : "¥"}${total.toLocaleString()}${quantity === 1 ? (locale === "en" ? " / pc" : " / 件") : ""}`;
+}
+
 const discoveryGoals: DiscoveryBrief["goal"][] = [
   "导航与避障",
   "姿态与平衡",
@@ -661,7 +682,7 @@ function ProcurementDrawer({
                   <small>{item.product.model}</small>
                   <strong>{v(item.product.name)}</strong>
                   <span className={configured ? "configured" : "pending"}>{configured ? c("已配置", "Configured") : c("待配置", "Configuration required")}</span>
-                  <em>{item.quantity} {c("件", "pcs")} · {productPriceLabel(item.product, locale, item.quantity)}</em>
+                  <em>{item.quantity} {c("件", "pcs")} · {configured ? configuredPriceLabel(item.product, item.configuration, locale, item.quantity) : c("待配置", "Configuration required")}</em>
                 </div>
                 <button className="configure" onClick={() => onConfigure(item.product)}>{configured ? c("修改", "Edit") : c("去配置", "Configure")} →</button>
                 <button className="remove" onClick={() => onRemove(item.productId)} aria-label={c("移除产品", "Remove product")}>×</button>
@@ -1093,7 +1114,7 @@ function StandardFlow({
     }));
   const engineering = selected.engineeringReview;
   const primaryInterface = configuration.interface ?? configuration.realtime ?? configuration.network ?? "按所选方案";
-  const estimatedTotalLabel = productPriceLabel(selected, locale, qty);
+  const estimatedTotalLabel = configuredPriceLabel(selected, configuration, locale, qty);
   const procurementProducts = procurementItems.map((item) => ({
     ...item,
     product: products.find((product) => product.id === item.productId)!,
@@ -1101,19 +1122,17 @@ function StandardFlow({
   const totalProcurementQuantity = procurementItems.reduce((total, item) => total + item.quantity, 0);
   const pendingConfigurationCount = procurementItems.filter((item) => Object.keys(item.configuration).length === 0).length;
   const allProcurementConfigured = procurementItems.length > 0 && pendingConfigurationCount === 0;
-  const pricedProcurementItems = procurementItems.filter((item) => standardUnitPriceRanges[item.productId]);
-  const procurementPriceRange = pricedProcurementItems.reduce((total, item) => {
-    const range = standardUnitPriceRanges[item.productId];
-    return {
-      low: total.low + range.low * item.quantity,
-      high: total.high + range.high * item.quantity,
-    };
-  }, { low: 0, high: 0 });
+  const procurementConfiguredTotal = procurementProducts.reduce((total, item) => {
+    const unitPrice = configuredUnitPrice(item.product, item.configuration);
+    return total + (unitPrice === null ? 0 : unitPrice * item.quantity);
+  }, 0);
+  const pendingQuoteCount = procurementProducts.filter((item) =>
+    Object.keys(item.configuration).length > 0 && configuredUnitPrice(item.product, item.configuration) === null).length;
   const procurementPriceLabel = procurementItems.length === 0
     ? c("尚未加入产品", "No products added")
-    : pricedProcurementItems.length === 0
+    : procurementConfiguredTotal === 0
       ? c("评估后报价", "Quoted after review")
-      : `${locale === "zh" ? "¥" : "RMB "}${procurementPriceRange.low.toLocaleString()}–${locale === "zh" ? "¥" : "RMB "}${procurementPriceRange.high.toLocaleString()}${pricedProcurementItems.length < procurementItems.length ? c(" + 待报价项", " + items pending quote") : ""}`;
+      : `${locale === "zh" ? "¥" : "RMB "}${procurementConfiguredTotal.toLocaleString()}${pendingQuoteCount ? c(" + 待报价项", " + items pending quote") : ""}`;
   const customerComplete = [customer.company, customer.contact, customer.contactDetail, customer.country, customer.city, customer.address]
     .every((value) => value.trim().length > 0);
   const customerLocation = `${v(customer.country)} · ${customer.city}`;
@@ -1210,9 +1229,7 @@ function StandardFlow({
       need: `客户一次性提交集采报单，共 ${procurementItems.length} 项、${totalProcurementQuantity} 件：\n${itemSummary}\n需要统一确认正式价格、库存、分批交付与整体交期。`,
       address: `${customer.country} ${customer.city} ${customer.address}${customer.postalCode ? `，${customer.postalCode}` : ""}`,
       nextAction: procurementItems.length > 1 ? "销售核对集采明细，合并确认价格、库存与交付排期。" : totalProcurementQuantity > 10 ? "销售确认批量库存、阶梯价格和交付排期。" : "销售确认订单、正式价格和发货安排。",
-      estimatedPrice: procurementItems.length
-        ? `${procurementPriceRange.low ? `¥${procurementPriceRange.low.toLocaleString()}–¥${procurementPriceRange.high.toLocaleString()}` : "评估后报价"}${pricedProcurementItems.length < procurementItems.length ? " + 待报价项" : ""}`
-        : "评估后报价",
+      estimatedPrice: procurementItems.length ? procurementPriceLabel : "评估后报价",
     };
     setOrderId(id);
     onLeadCreated(lead);
@@ -1372,7 +1389,7 @@ function StandardFlow({
               {procurementProducts.length ? procurementProducts.map(({ product, quantity, configuration: itemConfiguration }) => (
                 <article key={product.id}>
                   <img src={product.image} alt="" />
-                  <div><small>{product.model}</small><strong>{v(product.name)}</strong><em>{Object.keys(itemConfiguration).length ? productPriceLabel(product, locale, quantity) : c("待配置", "Configuration required")}</em></div>
+                  <div><small>{product.model}</small><strong>{v(product.name)}</strong><em>{Object.keys(itemConfiguration).length ? configuredPriceLabel(product, itemConfiguration, locale, quantity) : c("待配置", "Configuration required")}</em></div>
                   <div className="procurement-item-actions">
                     {!Object.keys(itemConfiguration).length && <button type="button" className="configure-pending" onClick={() => selectProcurementProduct(product)}>{c("去配置", "Configure")}</button>}
                     <button type="button" onClick={() => updateProcurementQuantity(product.id, quantity - 1)}>−</button>
@@ -1388,7 +1405,7 @@ function StandardFlow({
               <div><dt>{c("产品项", "Line items")}</dt><dd>{procurementItems.length} {c("项", "items")}</dd></div>
               <div><dt>{c("总数量", "Total quantity")}</dt><dd>{totalProcurementQuantity} {c("件", "pcs")}</dd></div>
             </dl>
-            <div className="price-row"><span>{c("集采参考总价", "Indicative total")}</span><strong>{procurementPriceLabel}</strong></div>
+            <div className="price-row"><span>{c("集采配置总价", "Configured total")}</span><strong>{procurementPriceLabel}</strong></div>
             <p className="small-note">{customerComplete
               ? locale === "zh" ? `客户：${customer.company} · ${customerLocation}。` : `Customer: ${customer.company} · ${customerLocation}. `
               : c("请完整填写公司、联系人和收货地址后提交。", "Complete the company, contact and delivery details before submitting. ")}
@@ -1408,7 +1425,7 @@ function StandardFlow({
           <div className="confirmation-card">
             <div><small>{c("产品项", "Line items")}</small><strong>{procurementItems.length} {c("项", "items")}</strong></div>
             <div><small>{c("总数量", "Total quantity")}</small><strong>{totalProcurementQuantity} {c("件", "pcs")}</strong></div>
-            <div><small>{c("参考总价", "Indicative total")}</small><strong>{procurementPriceLabel}</strong></div>
+            <div><small>{c("配置总价", "Configured total")}</small><strong>{procurementPriceLabel}</strong></div>
             <div><small>{c("处理方式", "Handling")}</small><strong>{c("统一报价与排期", "Consolidated quote and schedule")}</strong></div>
           </div>
           <div className="generated-procurement-sheet">
@@ -1419,7 +1436,7 @@ function StandardFlow({
                 <img src={product.image} alt="" />
                 <div><small>{product.model}</small><strong>{v(product.name)}</strong><p>{Object.values(itemConfiguration).slice(0, 3).map(v).join(" · ")}</p></div>
                 <b>× {quantity}</b>
-                <em>{productPriceLabel(product, locale, quantity)}</em>
+                <em>{configuredPriceLabel(product, itemConfiguration, locale, quantity)}</em>
               </article>
             ))}
             <p>{c("仅供参考，正式价格与交付以销售确认为准。", "For reference only; final terms require sales confirmation.")}</p>
@@ -1591,21 +1608,6 @@ function CustomFlow({
                 <label><span>{c("机器人类型 *", "Robot type *")}</span><select value={form.scene} onChange={(e) => update("scene", e.target.value)}>{["人形机器人", "AMR / AGV", "协作机械臂", "服务机器人", "其他"].map((scene) => <option value={scene} key={scene}>{v(scene)}</option>)}</select></label>
                 <label className="full-field"><span>{c("需求描述 *", "Requirements *")}</span><textarea required value={form.need} onChange={(e) => update("need", e.target.value)} placeholder={c("用途、接口、环境、安装、数量和时间…", "Task, interface, environment, installation, volume and timing…")} /></label>
               </div>
-              <div className="ai-requirement-coach" aria-live="polite">
-                <div className="requirement-score"><span>AI</span><p><small>{c("信息完整度", "Information completeness")}</small><strong>{requirementCompleteness}%</strong></p><i><b style={{ width: `${requirementCompleteness}%` }} /></i></div>
-                <div className="requirement-checks">
-                  {requirementChecks.map((item) => <span className={item.done ? "done" : ""} key={item.label}>{item.done ? "✓" : "+"} {item.label}</span>)}
-                </div>
-                <div className="requirement-prompts">
-                  <small>{c("点击补充缺失项", "Add missing details")}</small>
-                  <div>{requirementFragments.map((fragment) => <button type="button" key={fragment} onClick={() => addRequirementFragment(fragment)}>{fragment}</button>)}</div>
-                </div>
-                <p><b>{c("当前信息检查：", "Current information check: ")}</b>{form.need.trim()
-                  ? locale === "zh"
-                    ? `${form.scene}项目，主要用于${brief.goal}；已包含 ${requirementChecks.filter((item) => item.done).map((item) => item.label).join("、") || "基础场景"}，其余内容需要后续确认。`
-                    : `${v(form.scene)} project for ${v(brief.goal)}; captured: ${requirementChecks.filter((item) => item.done).map((item) => item.label).join(", ") || "basic application"}. Remaining items still need confirmation.`
-                  : c("请先描述任务目标。", "Start with the task.")}</p>
-              </div>
             </div>
             <div className="form-section">
               <div className="form-section-title"><span>02</span><div><h2>{c("采购与联系", "Purchasing & contact")}</h2></div></div>
@@ -1635,6 +1637,21 @@ function CustomFlow({
           </form>
         </div>
         <aside className="custom-aside">
+          <div className="ai-requirement-coach aside-requirement-coach" aria-live="polite">
+            <div className="requirement-score"><span>AI</span><p><small>{c("信息完整度", "Information completeness")}</small><strong>{requirementCompleteness}%</strong></p><i><b style={{ width: `${requirementCompleteness}%` }} /></i></div>
+            <div className="requirement-checks">
+              {requirementChecks.map((item) => <span className={item.done ? "done" : ""} key={item.label}>{item.done ? "✓" : "+"} {item.label}</span>)}
+            </div>
+            <div className="requirement-prompts">
+              <small>{c("点击补充缺失项", "Add missing details")}</small>
+              <div>{requirementFragments.map((fragment) => <button type="button" key={fragment} onClick={() => addRequirementFragment(fragment)}>{fragment}</button>)}</div>
+            </div>
+            <p><b>{c("当前信息检查：", "Current information check: ")}</b>{form.need.trim()
+              ? locale === "zh"
+                ? `${form.scene}项目，主要用于${brief.goal}；已包含 ${requirementChecks.filter((item) => item.done).map((item) => item.label).join("、") || "基础场景"}，其余内容需要后续确认。`
+                : `${v(form.scene)} project for ${v(brief.goal)}; captured: ${requirementChecks.filter((item) => item.done).map((item) => item.label).join(", ") || "basic application"}. Remaining items still need confirmation.`
+              : c("请先描述任务目标。", "Start with the task.")}</p>
+          </div>
           <div className="live-estimate-card aside-estimate" aria-live="polite">
             <div className="live-estimate-main">
               <div className="live-estimate-label"><span>AI</span><p><small>PRELIMINARY RANGE</small><b>{c("初步参考估价", "Preliminary estimate")}</b></p></div>
