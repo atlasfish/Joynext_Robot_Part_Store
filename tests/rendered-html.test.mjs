@@ -38,6 +38,8 @@ test("renders development preview metadata", async () => {
   assert.match(html, /查看配置/);
   assert.match(html, /JOYNEXT AI 选型助理/);
   assert.match(html, /从需求出发/);
+  assert.match(html, /按应用场景分类/);
+  assert.doesNotMatch(html, /按机器人应用查看产品。/);
   assert.match(html, /候选产品/);
   assert.match(html, /提交采购意向/);
   assert.match(html, /参考单价/);

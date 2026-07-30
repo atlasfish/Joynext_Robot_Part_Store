@@ -839,7 +839,7 @@ function Home({
         <div className="hero-grid">
           <div className="hero-copy" data-reveal>
             <div className="eyebrow"><span /> ROBOTICS COMPONENTS</div>
-            <h1>{c("从需求出发，", "Find the right component,")}<br /><em>{c("找到合适的产品。", "starting with your application.")}</em></h1>
+            <h1>{c("从需求出发，", "Find the right component,")}<br /><em>{c("找到合适的产品", "starting with your application")}</em></h1>
             <p>{c(
               "按用途、距离和接口快速选型；复杂需求可转销售与工程师。",
               "Shortlist by task, range and interface. Specialists support complex needs.",
@@ -881,7 +881,7 @@ function Home({
 
         <section className="scenario-section" id="scenarios">
           <div className="section-heading split" data-reveal>
-            <div><span>SHOP BY APPLICATION</span><h2>{c("按机器人应用查看产品。", "Explore products by application.")}</h2></div>
+            <div><span>SHOP BY APPLICATION</span><h2>{c("按应用场景分类", "Browse by application")}</h2></div>
             <p>{c("选择接近您的机器人类型，我们会优先展示适合该任务、工作距离和系统条件的产品。", "Choose the robot type closest to your project to see products suited to its task, working range and system constraints.")}</p>
           </div>
           <div className="scenario-grid">
@@ -959,7 +959,7 @@ function Home({
         <section className="path-section" id="workflow">
           <div className="section-heading center" data-reveal>
             <span>TWO WAYS TO REQUEST</span>
-            <h2>{c("根据需求清晰度，选择提交方式。", "Choose the right request path.")}</h2>
+            <h2>{c("根据需求清晰度，选择提交方式", "Choose the right request path")}</h2>
             <p>{c("标准件直接询价，复杂项目联合评估。", "Request standard products or review complex projects.")}</p>
           </div>
           <div className="path-grid">
@@ -979,7 +979,7 @@ function Home({
         </section>
 
         <section className="trust-boundary-section" id="support" data-reveal>
-          <div className="trust-boundary-copy"><span>RELIABLE SELECTION SUPPORT</span><h2>{c("资料辅助选型，", "Data-guided selection,")}<br />{c("专业人员确认。", "specialist confirmed.")}</h2><p>{c("兼容性、价格与交付由销售或工程师确认。", "Compatibility, pricing and delivery require specialist confirmation.")}</p><button onClick={() => onAskAi(c("请帮我梳理采购条件和待确认项。", "Help structure my requirements and open questions."))}>{c("咨询选型", "Ask advisor")} <b>↗</b></button></div>
+          <div className="trust-boundary-copy"><span>RELIABLE SELECTION SUPPORT</span><h2>{c("资料辅助选型，", "Data-guided selection,")}<br />{c("专业人员确认", "specialist confirmed")}</h2><p>{c("兼容性、价格与交付由销售或工程师确认。", "Compatibility, pricing and delivery require specialist confirmation.")}</p><button onClick={() => onAskAi(c("请帮我梳理采购条件和待确认项。", "Help structure my requirements and open questions."))}>{c("咨询选型", "Ask advisor")} <b>↗</b></button></div>
           <div className="trust-principles">
             {[
               ["01", c("参数来源清楚", "Traceable specifications"), c("关键产品信息标注资料页码", "Key product information includes source pages")],
@@ -1797,7 +1797,7 @@ function Footer() {
     <footer className="contact-footer" id="contact">
       <div className="contact-footer-intro">
         <span>CONTACT JOYNEXT</span>
-        <h2>{c("让销售与工程团队继续协助。", "Continue with sales and engineering.")}</h2>
+        <h2>{c("让销售与工程团队继续协助", "Continue with sales and engineering")}</h2>
         <p>{c("发送产品型号、数量和项目阶段，我们会安排后续沟通。", "Share the model, quantity and project stage for follow-up.")}</p>
       </div>
       <div className="contact-footer-methods">
