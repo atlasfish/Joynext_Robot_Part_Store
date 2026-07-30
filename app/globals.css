@@ -938,7 +938,7 @@ button { letter-spacing: -.01em; }
 .stage-spec span { color: #718096; font-size: 8px; }
 .spec-top { right: -2%; top: 22%; }
 .spec-bottom { right: 4%; bottom: 12%; }
-.scroll-cue { position: absolute; z-index: 2; left: 50%; bottom: 24px; display: flex; align-items: center; gap: 8px; color: #5e6774; font-size: 8px; letter-spacing: .1em; transform: translateX(-50%); }
+.scroll-cue { position: absolute; z-index: 2; left: 50%; bottom: 24px; display: flex; align-items: center; gap: 8px; padding: 0; color: #5e6774; background: transparent; border: 0; font-size: 8px; letter-spacing: .1em; transform: translateX(-50%); }
 .scroll-cue span { width: 22px; height: 35px; border: 1px solid rgba(255,255,255,.17); border-radius: 99px; }
 .scroll-cue span:after { content: ""; display: block; width: 3px; height: 6px; margin: 7px auto; background: #7197d8; border-radius: 99px; animation: scrollCue 1.8s ease-in-out infinite; }
 @keyframes scrollCue { 70% { transform: translateY(12px); opacity: 0; } }
@@ -1975,4 +1975,54 @@ footer { background: #1d1d1f; }
   .path-card { min-height: 310px; }
   .trust-boundary-section { padding-top: 34px; padding-bottom: 34px; }
   .flow-title h1 { font-size: 34px; }
+}
+
+/* Full-height opening pages with a controlled snap between hero and guided selection. */
+@media (min-width: 981px) {
+  html {
+    scroll-padding-top: 64px;
+    scroll-snap-type: y proximity;
+  }
+  .hero,
+  .discovery-snap-page {
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+  .hero {
+    height: calc(100svh - 64px);
+    min-height: 620px;
+  }
+  .hero-grid {
+    height: 100%;
+    min-height: 0;
+    padding-top: clamp(34px, 6vh, 72px);
+    padding-bottom: clamp(46px, 8vh, 88px);
+  }
+  .hero h1 {
+    margin-top: clamp(18px, 3vh, 30px);
+    margin-bottom: clamp(16px, 2.5vh, 24px);
+    font-size: clamp(50px, min(5.35vw, 8.4vh), 78px);
+  }
+  .hero-copy > p { margin-bottom: clamp(18px, 3vh, 26px); }
+  .hero-proof { margin-top: clamp(20px, 3.5vh, 34px); }
+  .hero-product-stage {
+    height: min(520px, calc(100svh - 170px));
+    min-height: 400px;
+  }
+  .hero-product-stage > img { max-height: min(430px, 48vh); }
+  .discovery-snap-page {
+    min-height: calc(100svh - 64px);
+    padding: clamp(38px, 7vh, 72px) 0;
+    display: grid;
+    align-items: center;
+    background: #fff;
+  }
+  .discovery-snap-page .ai-discovery-workspace {
+    width: calc(100% - 56px);
+    margin: 0 auto;
+  }
+}
+
+@media (max-width: 980px) {
+  .discovery-snap-page { padding-top: 1px; }
 }

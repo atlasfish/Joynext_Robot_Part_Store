@@ -752,11 +752,15 @@ function Home({
             <div className="stage-spec spec-bottom"><b>2,070 TOPS</b><span>{c("整机峰值算力", "Peak system compute")}</span></div>
           </div>
         </div>
-        <div className="scroll-cue"><span /> {c("浏览产品", "Explore products")}</div>
+        <button className="scroll-cue" type="button" onClick={() => document.getElementById("ai-discovery")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
+          <span /> {c("智能选型", "Guided selection")}
+        </button>
       </section>
 
       <main className="customer-home">
-        <AiDiscoveryWorkspace brief={brief} onBriefChange={onBriefChange} onNavigate={onNavigate} onSelect={onSelect} onAskAi={onAskAi} />
+        <div className="discovery-snap-page">
+          <AiDiscoveryWorkspace brief={brief} onBriefChange={onBriefChange} onNavigate={onNavigate} onSelect={onSelect} onAskAi={onAskAi} />
+        </div>
 
         <section className="scenario-section" id="scenarios">
           <div className="section-heading split" data-reveal>
