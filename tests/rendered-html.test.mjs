@@ -66,6 +66,7 @@ test("streams non-thinking Qwen responses and renders Markdown safely", async ()
   assert.match(page, /function configuredUnitPrice/);
   assert.match(page, /集采配置总价/);
   assert.match(page, /aside-requirement-coach/);
+  assert.match(page, /aside-configuration-check/);
   assert.match(page, /一次提交并生成报单/);
   assert.match(page, /集采报单已生成/);
   assert.match(page, /打印 \/ 保存报单/);

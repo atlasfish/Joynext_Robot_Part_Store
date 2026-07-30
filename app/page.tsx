@@ -1135,36 +1135,13 @@ function StandardFlow({
       : `${locale === "zh" ? "¥" : "RMB "}${procurementConfiguredTotal.toLocaleString()}${pendingQuoteCount ? c(" + 待报价项", " + items pending quote") : ""}`;
   const customerComplete = [customer.company, customer.contact, customer.contactDetail, customer.country, customer.city, customer.address]
     .every((value) => value.trim().length > 0);
+  const configuredFieldCount = selected.configuration.filter((field) => Boolean(configuration[field.key])).length;
+  const configurationCompletion = Math.round(
+    ((configuredFieldCount + (customerComplete ? 1 : 0)) / (selected.configuration.length + 1)) * 100,
+  );
   const customerLocation = `${v(customer.country)} · ${customer.city}`;
   const recommendations = useMemo(() => recommendProducts(brief, products), [brief, products]);
   const recommended = recommendations[0];
-  const selectedMatch = recommendations.find((item) => item.product.id === selected.id) ?? recommendations[0];
-  const configurationSignals = [
-    {
-      label: c("用途匹配", "Application fit"),
-      status: `${selectedMatch.score}%`,
-      tone: selectedMatch.score >= 85 ? "good" : "attention",
-      detail: locale === "zh"
-        ? `${selected.model} 与“${brief.scene} · ${brief.goal}”的资料匹配度`
-        : `${selected.model} fit for “${v(brief.scene)} · ${v(brief.goal)}” based on available data`,
-    },
-    {
-      label: c("配置确认", "Configuration check"),
-      status: engineering ? c("需工程确认", "Engineering review") : primaryInterface.includes("需确认") || primaryInterface.includes("EtherCAT") ? c("需核对接口", "Interface check") : c("资料内可配置", "Configurable"),
-      tone: engineering || primaryInterface.includes("需确认") || primaryInterface.includes("EtherCAT") ? "attention" : "good",
-      detail: engineering
-        ? c("最终接口、安装、环境与系统边界需要联合评审", "Final interfaces, installation, environment and system constraints require joint review")
-        : locale === "zh" ? `${primaryInterface} 已纳入采购意向摘要` : `${v(primaryInterface)} is included in your purchase request`,
-    },
-    {
-      label: c("采购下一步", "Purchasing next step"),
-      status: qty > 10 ? c("销售确认批量需求", "Sales checks volume") : c("可提交采购意向", "Ready to submit"),
-      tone: qty > 10 ? "attention" : "good",
-      detail: qty > 10
-        ? c("销售将确认阶梯价格、库存和交付计划", "Sales will confirm volume pricing, stock and delivery plan")
-        : c("补全公司与收货信息后即可提交", "Complete company and delivery details to submit"),
-    },
-  ];
 
   function selectProcurementProduct(product: Product) {
     onSelect(product);
@@ -1302,21 +1279,6 @@ function StandardFlow({
                 <label><span>{c("预计数量 *", "Expected quantity *")}</span><div className="quantity"><button type="button" onClick={() => setQty(Math.max(1, qty - 1))}>−</button><input value={qty} readOnly aria-label={c("预计数量", "Expected quantity")} /><button type="button" onClick={() => setQty(qty + 1)}>＋</button></div></label>
               </div>
             </div>
-            <div className="ai-configuration-companion" aria-live="polite">
-              <div className="ai-companion-heading"><span>AI</span><p><small>CONFIGURATION CHECK</small><b>{c("配置检查", "Configuration check")}</b></p><button type="button" onClick={() => onAskAi(locale === "zh"
-                ? `请评估我为${brief.scene}选择的 ${selected.model} 配置：${Object.entries(configuration).map(([key, value]) => `${key}=${value}`).join("；")}。说明匹配点、风险和仍需确认的参数。`
-                : `Review my ${selected.model} configuration for a ${v(brief.scene)} application: ${Object.entries(configuration).map(([key, value]) => `${key}=${v(value)}`).join("; ")}. Explain the fit, risks and parameters still requiring confirmation.`)}>{c("咨询当前配置", "Review configuration")} →</button></div>
-              <div className="ai-signal-grid">
-                {configurationSignals.map((signal) => (
-                  <div className={signal.tone} key={signal.label}><span>{signal.label}</span><strong>{signal.status}</strong><p>{signal.detail}</p></div>
-                ))}
-              </div>
-              <p className="ai-handoff-note"><b>{c("下一步：", "Next step: ")}</b>{engineering
-                ? c("该产品需要工程评审。请转入项目需求，当前产品与配置会一并提交。", "This product requires engineering review. Continue with a project request; the selected product and configuration will be included.")
-                : customerComplete
-                  ? c("信息完整，可提交采购栏。", "Ready to submit.")
-                  : c("请补全联系与收货信息。", "Complete contact and delivery details.")}</p>
-            </div>
             <div className="panel customer-panel">
               <div className="panel-heading">
                 <div><h2>{c("联系与收货", "Contact & delivery")}</h2></div>
@@ -1374,6 +1336,25 @@ function StandardFlow({
             </div>
           </div>
           <aside className="order-summary">
+            <div className="aside-configuration-check" aria-live="polite">
+              <div className="aside-check-heading">
+                <span>AI</span>
+                <p><small>CONFIGURATION CHECK</small><b>{c("配置完成度", "Configuration progress")}</b></p>
+                <button type="button" onClick={() => onAskAi(locale === "zh"
+                  ? `请核对 ${selected.model} 当前配置：${Object.entries(configuration).map(([key, value]) => `${key}=${value}`).join("；")}。只列出风险和待确认项。`
+                  : `Review the current ${selected.model} configuration: ${Object.entries(configuration).map(([key, value]) => `${key}=${v(value)}`).join("; ")}. Only list risks and open items.`)}>{c("AI 核对", "AI review")}</button>
+              </div>
+              <div className="aside-check-progress"><strong>{configurationCompletion}%</strong><i><b style={{ width: `${configurationCompletion}%` }} /></i></div>
+              <div className="aside-check-status">
+                <span className="done">✓ {c(`${configuredFieldCount}/${selected.configuration.length} 项配置`, `${configuredFieldCount}/${selected.configuration.length} configured`)}</span>
+                <span className={customerComplete ? "done" : ""}>{customerComplete ? "✓" : "○"} {c("联系信息", "Contact details")}</span>
+              </div>
+              <p>{engineering
+                ? c("需工程确认", "Engineering review required")
+                : customerComplete
+                  ? c("可以加入采购单", "Ready for procurement")
+                  : c("补全联系信息后提交", "Add contact details to submit")}</p>
+            </div>
             <div className="procurement-heading">
               <div><span className="summary-label">PROCUREMENT LIST</span><h2>{c("采购栏", "Procurement list")}</h2></div>
               <b>{procurementItems.length}</b>
@@ -1836,7 +1817,7 @@ function Footer() {
         <div><small>{c("中国总部", "China headquarters")}</small><strong>{c("浙江省宁波市高新区清逸路 99 号", "No. 99 Qingyi Road, Hi-Tech Park, Ningbo")}</strong></div>
       </div>
       <div className="contact-footer-bottom">
-        <Logo inverse />
+        <Logo />
         <p>{c("机器人元器件选型、询价与项目支持", "Robotics component selection, quotation and project support")}</p>
         <div><a href="#products">{c("产品", "Products")}</a><a href="#scenarios">{c("应用", "Applications")}</a><a href="#support">{c("支持", "Support")}</a><span>© 2026 JOYNEXT</span></div>
       </div>
