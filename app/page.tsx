@@ -1559,6 +1559,17 @@ function CustomFlow({
                 : `${v(form.scene)} project for ${v(brief.goal)}; captured: ${requirementChecks.filter((item) => item.done).map((item) => item.label).join(", ") || "basic application"}. Remaining items still need confirmation.`
               : c("请先描述任务目标。", "Start with the task.")}</p>
           </div>
+          <button className="aside-ai-review" type="button" onClick={() => onAskAi(form.need.trim()
+            ? locale === "zh" ? `请根据以下项目需求给出候选产品组合、缺失信息和工程风险：场景=${form.scene}；阶段=${form.stage}；需求=${form.need}` : `For this project request, suggest candidate products, missing information and engineering risks: application=${v(form.scene)}; stage=${v(form.stage)}; requirements=${form.need}`
+            : locale === "zh" ? `请围绕${form.scene}和${brief.goal}目标，通过关键问题帮我补全一份可供工程师评估的需求描述。` : `For ${v(form.scene)} and ${v(brief.goal)}, ask key questions to help me complete a requirement description for engineering review.`)}>
+            <span>AI</span><p><b>{form.need.trim() ? c("检查需求", "Review requirements") : c("补全需求", "Complete requirements")}</b><small>{c("候选产品与待确认项", "Candidates and open questions")}</small></p><em>→</em>
+          </button>
+          <div className="next-card"><h3>{c("提交后会发生什么", "What happens after submission")}</h3>{[
+            ["1", c("需求确认", "Request received"), c("生成需求编号与摘要", "Reference and summary created")],
+            ["2", c("销售联系", "Sales contact"), c("预计 2 小时内首次联系", "First contact expected within 2 hours")],
+            ["3", c("工程评估", "Engineering review"), c("确认接口、风险与技术边界", "Confirm interfaces, risks and technical scope")],
+            ["4", c("报价与计划", "Quote and plan"), c("预计 2 个工作日内提供", "Expected within 2 business days")],
+          ].map(([n, h, p]) => <div key={n}><span>{n}</span><p><b>{h}</b><small>{p}</small></p></div>)}</div>
           <div className="live-estimate-card aside-estimate" aria-live="polite">
             <div className="live-estimate-main">
               <div className="live-estimate-label"><span>AI</span><p><small>PRELIMINARY RANGE</small><b>{c("初步参考估价", "Preliminary estimate")}</b></p></div>
@@ -1570,19 +1581,6 @@ function CustomFlow({
               <p><b>{c("仅供参考。", "For reference only. ")}</b>{c("正式价格由销售确认。", "Sales confirms final pricing.")}</p>
             </div>
           </div>
-          <button className="aside-ai-review" type="button" onClick={() => onAskAi(form.need.trim()
-            ? locale === "zh" ? `请根据以下项目需求给出候选产品组合、缺失信息和工程风险：场景=${form.scene}；阶段=${form.stage}；需求=${form.need}` : `For this project request, suggest candidate products, missing information and engineering risks: application=${v(form.scene)}; stage=${v(form.stage)}; requirements=${form.need}`
-            : locale === "zh" ? `请围绕${form.scene}和${brief.goal}目标，通过关键问题帮我补全一份可供工程师评估的需求描述。` : `For ${v(form.scene)} and ${v(brief.goal)}, ask key questions to help me complete a requirement description for engineering review.`)}>
-            <span>AI</span><p><b>{form.need.trim() ? c("检查需求", "Review requirements") : c("补全需求", "Complete requirements")}</b><small>{c("候选产品与待确认项", "Candidates and open questions")}</small></p><em>→</em>
-          </button>
-          <div className="sales-card"><span className="live-dot" /><small>SALES + ENGINEERING</small><h3>{c("一次提交，持续跟进", "One request, continuous follow-up")}</h3><div className="avatar-row"><i>AI</i><i>{c("销", "S")}</i><i>{c("技", "E")}</i><span>{c("智能整理 + 专业确认", "AI structured + specialist confirmed")}</span></div></div>
-          <div className="next-card"><h3>{c("提交后会发生什么", "What happens after submission")}</h3>{[
-            ["1", c("需求确认", "Request received"), c("生成需求编号与摘要", "Reference and summary created")],
-            ["2", c("销售联系", "Sales contact"), c("预计 2 小时内首次联系", "First contact expected within 2 hours")],
-            ["3", c("工程评估", "Engineering review"), c("确认接口、风险与技术边界", "Confirm interfaces, risks and technical scope")],
-            ["4", c("报价与计划", "Quote and plan"), c("预计 2 个工作日内提供", "Expected within 2 business days")],
-          ].map(([n, h, p]) => <div key={n}><span>{n}</span><p><b>{h}</b><small>{p}</small></p></div>)}</div>
-          <div className="trust-card"><h3>{c("信息边界", "Information boundary")}</h3><p>{c("兼容、安全、价格与设计结论需专业确认。", "Compatibility, safety, pricing and design require specialist confirmation.")}</p></div>
         </aside>
       </section>
     </main>
