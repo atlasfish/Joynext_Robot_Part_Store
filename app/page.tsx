@@ -323,59 +323,6 @@ function PurchaseIcon() {
   );
 }
 
-function MotionEffects() {
-  useEffect(() => {
-    const root = document.documentElement;
-    const reduceMotion = window.matchMedia("(prefers-reduced-motion: reduce)");
-    if (reduceMotion.matches) return;
-
-    root.classList.add("motion-ready");
-    let frame = 0;
-    const updateParallax = () => {
-      frame = 0;
-      const scroll = Math.min(window.scrollY, 2400);
-      root.style.setProperty("--parallax-slow", `${scroll * 0.055}px`);
-      root.style.setProperty("--parallax-fast", `${scroll * -0.035}px`);
-    };
-    const onScroll = () => {
-      if (!frame) frame = window.requestAnimationFrame(updateParallax);
-    };
-    updateParallax();
-    window.addEventListener("scroll", onScroll, { passive: true });
-
-    const observer = new IntersectionObserver((entries) => {
-      entries.forEach((entry) => {
-        if (entry.isIntersecting) {
-          entry.target.classList.add("is-visible");
-          observer.unobserve(entry.target);
-        }
-      });
-    }, { rootMargin: "0px 0px -8% 0px", threshold: 0.08 });
-    const observeRevealElement = (element: Element) => {
-      if (element.matches("[data-reveal]")) observer.observe(element);
-      element.querySelectorAll("[data-reveal]").forEach((child) => observer.observe(child));
-    };
-    document.querySelectorAll("[data-reveal]").forEach((element) => observer.observe(element));
-    const mutationObserver = new MutationObserver((mutations) => {
-      mutations.forEach((mutation) => mutation.addedNodes.forEach((node) => {
-        if (node instanceof Element) observeRevealElement(node);
-      }));
-    });
-    mutationObserver.observe(document.body, { childList: true, subtree: true });
-
-    return () => {
-      window.removeEventListener("scroll", onScroll);
-      if (frame) window.cancelAnimationFrame(frame);
-      observer.disconnect();
-      mutationObserver.disconnect();
-      root.classList.remove("motion-ready");
-      root.style.removeProperty("--parallax-slow");
-      root.style.removeProperty("--parallax-fast");
-    };
-  }, []);
-  return null;
-}
-
 function AiAssistantDrawer({
   open,
   onClose,
@@ -1968,7 +1915,6 @@ export default function HomePage() {
     <LocaleContext.Provider value={{ locale, setLocale }}>
       <ProductCatalogContext.Provider value={storefrontProducts}>
         <div>
-          <MotionEffects />
           <Header
             onNavigate={navigate}
             onNavigateSection={navigateToSection}
