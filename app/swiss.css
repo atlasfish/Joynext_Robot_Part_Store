@@ -346,6 +346,21 @@ textarea {
   filter: drop-shadow(20px 28px 20px rgba(17, 17, 17, .14));
 }
 
+/* The minimal hero uses an explicit two-column grid, not the 12-column stage. */
+.hero-minimal .hero-copy {
+  grid-column: 1;
+}
+
+.hero-minimal .hero-product-stage {
+  grid-column: 2;
+  min-width: 0;
+}
+
+.hero-minimal .hero-product-stage > img {
+  opacity: 1;
+  visibility: visible;
+}
+
 .hero .stage-kicker {
   top: var(--jn-space-5);
   left: var(--jn-space-5);
@@ -1372,6 +1387,151 @@ textarea {
   border-radius: 0;
 }
 
+/* Purchase column: keep the dense workflow aligned to the Swiss component system. */
+.flow-shell .order-summary {
+  padding: var(--jn-space-6);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.flow-shell .aside-configuration-check {
+  margin: 0 0 var(--jn-space-6);
+  padding: var(--jn-space-5);
+  background: var(--color-accent-soft);
+  border: 1px solid var(--color-border-strong);
+  border-radius: 0;
+}
+
+.flow-shell .aside-check-heading > span,
+.flow-shell .aside-check-heading button,
+.flow-shell .aside-check-status span {
+  border-radius: 0;
+}
+
+.flow-shell .aside-check-status {
+  gap: var(--jn-space-2);
+}
+
+.flow-shell .aside-check-status span {
+  padding: var(--jn-space-2) var(--jn-space-3);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  font-size: 11px;
+}
+
+.flow-shell .procurement-heading {
+  align-items: center;
+  padding: var(--jn-space-2) 0 var(--jn-space-4);
+}
+
+.flow-shell .procurement-heading h2 {
+  margin-top: var(--jn-space-2);
+  font-size: var(--jn-text-2xl);
+  letter-spacing: -.04em;
+}
+
+.flow-shell .procurement-heading > b {
+  min-width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  font-size: 16px;
+}
+
+.flow-shell .procurement-current {
+  margin: 0 0 var(--jn-space-4);
+  padding: var(--jn-space-5);
+  background: var(--color-surface-subtle);
+  border: 1px solid var(--color-border);
+  border-radius: 0;
+  box-shadow: none;
+}
+
+.flow-shell .procurement-current > div {
+  grid-template-columns: 64px minmax(0, 1fr);
+  gap: var(--jn-space-4);
+}
+
+.flow-shell .procurement-current img {
+  width: 64px;
+  height: 56px;
+}
+
+.flow-shell .procurement-current span,
+.flow-shell .procurement-items article > div:nth-child(2) {
+  gap: var(--jn-space-1);
+}
+
+.flow-shell .procurement-current small,
+.flow-shell .procurement-items small {
+  font-size: 11px;
+}
+
+.flow-shell .procurement-current strong,
+.flow-shell .procurement-items strong {
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.flow-shell .procurement-current em,
+.flow-shell .procurement-items em {
+  font-size: 12px;
+}
+
+.flow-shell .procurement-current > button {
+  min-height: var(--button-height);
+  margin-top: var(--jn-space-5);
+  color: var(--color-on-primary);
+  background: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  border-radius: 0;
+  font-size: 13px;
+}
+
+.flow-shell .procurement-current > button:hover {
+  background: var(--color-primary-hover);
+}
+
+.flow-shell .procurement-items {
+  gap: 0;
+  max-height: 360px;
+  border-bottom: 1px solid var(--color-border);
+}
+
+.flow-shell .procurement-items article {
+  grid-template-columns: 56px minmax(0, 1fr);
+  gap: var(--jn-space-4);
+  padding: var(--jn-space-5) 0;
+  background: transparent;
+  border: 0;
+  border-top: 1px solid var(--color-border);
+  border-radius: 0;
+}
+
+.flow-shell .procurement-items article > img {
+  width: 56px;
+  height: 56px;
+}
+
+.flow-shell .procurement-item-actions {
+  gap: var(--jn-space-2);
+  margin-top: var(--jn-space-3);
+  grid-template-columns: 38px 42px 38px 1fr;
+}
+
+.flow-shell .procurement-item-actions button,
+.flow-shell .procurement-item-actions span {
+  height: 38px;
+  border-color: var(--color-border);
+  border-radius: 0;
+  font-size: 12px;
+}
+
+.flow-shell .procurement-item-actions .remove {
+  width: 38px;
+}
+
 .price-row strong,
 .live-estimate-main > strong,
 .custom-price-estimate strong {
@@ -1555,6 +1715,11 @@ textarea {
 @media (max-width: 980px) {
   :root {
     --header-height: 60px;
+  }
+
+  .hero-minimal .hero-copy,
+  .hero-minimal .hero-product-stage {
+    grid-column: 1;
   }
 
   .hero {
