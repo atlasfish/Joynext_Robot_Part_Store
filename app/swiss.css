@@ -2388,3 +2388,8 @@ textarea {
   text-indent: 0;
   line-height: 1;
 }
+
+/* An odd final product must leave a light empty grid cell, not expose the border color. */
+.selection-grid {
+  background: var(--color-surface);
+}
