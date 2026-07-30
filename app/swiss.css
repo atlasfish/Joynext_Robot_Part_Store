@@ -1167,6 +1167,29 @@ textarea {
   font-family: var(--jn-font-mono);
 }
 
+.ai-guide-refine select {
+  width: 100%;
+  min-height: var(--input-height);
+  padding: 0 var(--jn-space-4);
+  color: var(--color-foreground);
+  color-scheme: light;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border-strong);
+  border-radius: var(--input-radius);
+  box-shadow: none;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.ai-guide-refine select:hover {
+  background: var(--color-surface-subtle);
+}
+
+.ai-guide-refine select:focus {
+  border-color: var(--input-border-focus);
+  box-shadow: 0 0 0 2px var(--jn-teal-100);
+}
+
 .selection-grid {
   gap: 1px;
   margin-top: var(--jn-space-6);
