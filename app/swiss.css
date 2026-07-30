@@ -1298,6 +1298,33 @@ textarea {
   font-family: var(--jn-font-mono);
 }
 
+.flow-shell .form-section-title {
+  align-items: flex-start;
+  gap: var(--jn-space-4);
+  margin-bottom: var(--jn-space-5);
+}
+
+.flow-shell .form-section-title > span {
+  width: 40px;
+  height: auto;
+  min-height: 28px;
+  padding-top: var(--jn-space-2);
+  display: block;
+  color: var(--color-accent);
+  background: transparent;
+  border: 0;
+  border-top: 2px solid var(--color-accent);
+  border-radius: 0;
+  font-family: var(--jn-font-mono);
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1;
+}
+
+.flow-shell .form-section-title h2 {
+  line-height: 1.2;
+}
+
 .verified-table > div {
   border-bottom-color: var(--color-border);
 }
