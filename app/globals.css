@@ -3473,3 +3473,67 @@ footer.contact-footer {
   }
   .hero-minimal .hero-product-stage { height: 300px; }
 }
+
+/* The purchase shortcut stays icon-only until a real pointer hovers it. */
+.floating-order-button,
+.floating-order-button:focus-visible {
+  width: 58px;
+  min-width: 58px;
+  max-width: 58px;
+  min-height: 58px;
+  grid-template-columns: 34px 0 0;
+  gap: 0;
+  padding: 8px 11px;
+  overflow: hidden;
+  border-radius: 50%;
+  transition:
+    width .28s cubic-bezier(.2, .75, .2, 1),
+    max-width .28s cubic-bezier(.2, .75, .2, 1),
+    border-radius .28s ease,
+    transform .2s ease,
+    box-shadow .2s ease;
+}
+.floating-order-button:focus-visible {
+  outline: 3px solid rgba(0, 136, 145, .42);
+  outline-offset: 3px;
+}
+.floating-order-button > span:nth-child(2),
+.floating-order-button > i,
+.floating-order-button:focus-visible > span:nth-child(2),
+.floating-order-button:focus-visible > i {
+  width: 0;
+  opacity: 0;
+  overflow: hidden;
+  white-space: nowrap;
+}
+
+@media (hover: hover) and (pointer: fine) {
+  .floating-order-button:hover {
+    width: 206px;
+    min-width: 206px;
+    max-width: 206px;
+    grid-template-columns: 34px minmax(118px, 1fr) auto;
+    gap: 10px;
+    border-radius: 16px;
+  }
+  .floating-order-button:hover > span:nth-child(2),
+  .floating-order-button:hover > i {
+    width: auto;
+    opacity: 1;
+  }
+}
+
+@media (max-width: 680px), (hover: none) {
+  .floating-order-button,
+  .floating-order-button:hover,
+  .floating-order-button:focus-visible {
+    width: 52px;
+    min-width: 52px;
+    max-width: 52px;
+    min-height: 52px;
+    grid-template-columns: 34px 0 0;
+    gap: 0;
+    padding: 8px 9px;
+    border-radius: 50%;
+  }
+}
