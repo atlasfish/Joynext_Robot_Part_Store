@@ -2449,3 +2449,35 @@ textarea {
 .delivery-term-row p {
   margin: 0;
 }
+
+/* Promote request paths to the second viewport, ahead of guided selection. */
+@media (min-width: 981px) {
+  .customer-home > .featured-request-paths,
+  .customer-home > .discovery-snap-page {
+    min-height: calc(100svh - var(--header-height));
+    scroll-margin-top: var(--header-height);
+    scroll-snap-align: start;
+    scroll-snap-stop: always;
+  }
+
+  .customer-home > .featured-request-paths {
+    display: grid;
+    align-content: center;
+    padding-top: clamp(52px, 7vh, 84px);
+    padding-bottom: clamp(52px, 7vh, 84px);
+    background: var(--jn-gray-050);
+  }
+
+  .featured-request-paths .section-heading h2 {
+    font-size: clamp(54px, 6vw, 84px);
+  }
+
+  .featured-request-paths .path-grid {
+    margin-top: clamp(28px, 4.5vh, 48px);
+  }
+
+  .customer-home > .discovery-snap-page {
+    display: grid;
+    align-content: center;
+  }
+}

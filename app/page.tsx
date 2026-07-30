@@ -222,7 +222,7 @@ function recommendProducts(brief: DiscoveryBrief, products: Product[]) {
 const scenarios = [
   { icon: "◫", name: "AMR / AGV", note: "导航、定位与多传感器融合", image: withBasePath("/scenes/amr-warehouse.jpeg") },
   { icon: "⌁", name: "人形机器人", note: "感知、规划与硬实时伺服控制", image: withBasePath("/scenes/humanoid.png") },
-  { icon: "⌖", name: "机械臂", note: "高精度定位、视觉与末端感知", image: withBasePath("/products/depth-camera.webp") },
+  { icon: "⌖", name: "机械臂", note: "高精度定位、视觉与末端感知", image: withBasePath("/products/collaborative-robot-arm.png") },
 ];
 
 const seedLeads: LeadRecord[] = [
@@ -595,8 +595,8 @@ function Header({
             ))}
           </div>
         </div>
-        <button onClick={() => onNavigateSection("scenarios")}>{c("应用场景", "Applications")}</button>
         <button onClick={() => onNavigateSection("workflow")}>{c("采购方案", "Request options")}</button>
+        <button onClick={() => onNavigateSection("scenarios")}>{c("应用场景", "Applications")}</button>
         <button onClick={() => onNavigateSection("support")}>{c("选型支持", "Selection support")}</button>
         <button onClick={() => onNavigateSection("contact")}>{c("联系方式", "Contact")}</button>
       </nav>
@@ -864,6 +864,27 @@ function Home({
       </section>
 
       <main className="customer-home">
+        <section className="path-section featured-request-paths" id="workflow">
+          <div className="section-heading center" data-reveal>
+            <h2>TWO WAYS TO REQUEST</h2>
+            <p>{c("标准件直接询价，复杂项目联合评估。", "Request standard products or review complex projects.")}</p>
+          </div>
+          <div className="path-grid">
+            <article className="path-card standard" id="standard-order" data-reveal>
+              <div className="path-topline"><span>01</span><b>STANDARD</b></div>
+              <div className="path-icon">↗</div>
+              <div><h3>{c("标准件采购", "Standard products")}</h3><p>{c("选配置与数量，加入采购栏统一提交。", "Configure, add to the list and submit together.")}</p></div>
+              <button className="primary-button" onClick={() => onNavigate("standard")}>{c("选择并配置产品", "Select and configure")} <span>→</span></button>
+            </article>
+            <article className="path-card custom" data-reveal style={{ "--reveal-delay": "100ms" } as React.CSSProperties}>
+              <div className="path-topline"><span>02</span><b>ENGINEERING</b></div>
+              <div className="path-icon">＋</div>
+              <div><h3>{c("定制件咨询", "Custom request")}</h3><p>{c("提交关键条件，由销售与工程师联合评估。", "Share key constraints for joint review.")}</p></div>
+              <button className="dark-button" onClick={() => onNavigate("custom")}>{c("提交项目需求", "Submit project requirements")} <span>→</span></button>
+            </article>
+          </div>
+        </section>
+
         <div className="discovery-snap-page">
           <AiDiscoveryWorkspace brief={brief} onBriefChange={onBriefChange} onNavigate={onNavigate} onSelect={onSelect} onAskAi={onAskAi} />
         </div>
@@ -943,27 +964,6 @@ function Home({
             })}
           </div>
           {!visible.length && <div className="catalog-empty"><b>{c("暂未找到匹配产品", "No matching product found")}</b><p>{c("请尝试其他关键词，或描述用途、距离与接口，让选型助理继续查找。", "Try another keyword or describe the task, range and interface so the advisor can continue the search.")}</p><button onClick={() => onAskAi(locale === "zh" ? `请根据这个需求推荐可用产品：${query}` : `Recommend available products for this requirement: ${query}`)}>{c("继续查找", "Continue with advisor")} →</button></div>}
-        </section>
-
-        <section className="path-section" id="workflow">
-          <div className="section-heading center" data-reveal>
-            <h2>TWO WAYS TO REQUEST</h2>
-            <p>{c("标准件直接询价，复杂项目联合评估。", "Request standard products or review complex projects.")}</p>
-          </div>
-          <div className="path-grid">
-            <article className="path-card standard" id="standard-order" data-reveal>
-              <div className="path-topline"><span>01</span><b>STANDARD</b></div>
-              <div className="path-icon">↗</div>
-              <div><h3>{c("标准件采购", "Standard products")}</h3><p>{c("选配置与数量，加入采购栏统一提交。", "Configure, add to the list and submit together.")}</p></div>
-              <button className="primary-button" onClick={() => onNavigate("standard")}>{c("选择并配置产品", "Select and configure")} <span>→</span></button>
-            </article>
-            <article className="path-card custom" data-reveal style={{ "--reveal-delay": "100ms" } as React.CSSProperties}>
-              <div className="path-topline"><span>02</span><b>ENGINEERING</b></div>
-              <div className="path-icon">＋</div>
-              <div><h3>{c("定制需求单", "Custom request")}</h3><p>{c("提交关键条件，由销售与工程师联合评估。", "Share key constraints for joint review.")}</p></div>
-              <button className="dark-button" onClick={() => onNavigate("custom")}>{c("提交项目需求", "Submit project requirements")} <span>→</span></button>
-            </article>
-          </div>
         </section>
 
         <section className="trust-boundary-section" id="support" data-reveal>

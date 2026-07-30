@@ -85,6 +85,9 @@ test("streams non-thinking Qwen responses and renders Markdown safely", async ()
   assert.match(page, /tel:\+8657487127249/);
   assert.match(page, /onNavigateSection\("workflow"\)/);
   assert.match(page, /采购方案/);
+  assert.ok(page.indexOf('onNavigateSection("workflow")') < page.indexOf('onNavigateSection("scenarios")'));
+  assert.ok(page.indexOf('id="workflow"') < page.indexOf('className="discovery-snap-page"'));
+  assert.match(page, /collaborative-robot-arm\.png/);
   assert.match(styles, /\.floating-order-button:hover/);
   assert.match(styles, /\.contact-footer/);
 });
