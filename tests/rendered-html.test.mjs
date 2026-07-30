@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 const developmentPreviewMeta =
@@ -44,4 +45,17 @@ test("renders development preview metadata", async () => {
   assert.doesNotMatch(html, /选型 Copilot 持续在线/);
   assert.doesNotMatch(html, /标准件订单已生成/);
   assert.doesNotMatch(html, /sk-[A-Za-z0-9_-]{20,}/);
+});
+
+test("streams non-thinking Qwen responses and renders Markdown safely", async () => {
+  const route = await readFile(new URL("../app/api/assistant/route.ts", import.meta.url), "utf8");
+  const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+
+  assert.match(route, /qwen3\.7-flash/);
+  assert.match(route, /stream:\s*true/);
+  assert.match(route, /enable_thinking:\s*false/);
+  assert.match(route, /text\/event-stream/);
+  assert.match(page, /ReactMarkdown/);
+  assert.match(page, /remarkGfm/);
+  assert.match(page, /skipHtml/);
 });

@@ -59,6 +59,26 @@ main { display: block; }
 .assistant-message.user p { color: white; }
 .assistant-message > div { min-width: 0; padding: 11px 12px; background: white; border: 1px solid #d7e2f0; border-radius: 4px 12px 12px 12px; box-shadow: 0 5px 16px rgba(16,48,91,.05); }
 .assistant-message p { margin: 0; color: #304963; font-size: 11px; line-height: 1.75; white-space: pre-wrap; overflow-wrap: anywhere; }
+.assistant-markdown { color: #304963; font-size: 11px; line-height: 1.75; overflow-wrap: anywhere; }
+.assistant-markdown > :first-child { margin-top: 0; }
+.assistant-markdown > :last-child { margin-bottom: 0; }
+.assistant-markdown p { margin: 0 0 8px; white-space: normal; }
+.assistant-markdown h1, .assistant-markdown h2, .assistant-markdown h3 { margin: 12px 0 6px; color: #132f50; line-height: 1.35; }
+.assistant-markdown h1 { font-size: 15px; }
+.assistant-markdown h2 { font-size: 14px; }
+.assistant-markdown h3 { font-size: 12px; }
+.assistant-markdown ul, .assistant-markdown ol { margin: 6px 0 9px; padding-left: 19px; }
+.assistant-markdown li { margin: 3px 0; }
+.assistant-markdown strong { color: #123d70; }
+.assistant-markdown code { padding: 1px 4px; border-radius: 4px; background: #edf4fd; color: #0757b7; font: 10px/1.6 ui-monospace, SFMono-Regular, Consolas, monospace; }
+.assistant-markdown pre { margin: 8px 0; padding: 9px 10px; overflow-x: auto; border-radius: 7px; background: #10223b; color: #eaf4ff; }
+.assistant-markdown pre code { padding: 0; background: transparent; color: inherit; }
+.assistant-markdown blockquote { margin: 8px 0; padding: 5px 9px; border-left: 3px solid #4794ff; background: #f3f7fc; color: #57708d; }
+.assistant-markdown table { width: 100%; margin: 8px 0; border-collapse: collapse; font-size: 10px; }
+.assistant-markdown th, .assistant-markdown td { padding: 5px 6px; border: 1px solid #d7e2f0; text-align: left; }
+.assistant-markdown a { color: #075fd2; text-decoration: underline; text-underline-offset: 2px; }
+.assistant-message.streaming .assistant-markdown::after { content: ""; display: inline-block; width: 2px; height: 1.05em; margin-left: 3px; vertical-align: -2px; background: #1670ff; animation: aiCaret .75s steps(1) infinite; }
+@keyframes aiCaret { 50% { opacity: 0; } }
 .assistant-product-results { display: grid; gap: 7px; margin-top: 11px; }
 .assistant-product-results button { width: 100%; display: grid; grid-template-columns: 62px 1fr; gap: 9px; align-items: center; padding: 7px; text-align: left; background: #f4f8ff; border: 1px solid #c5d9f7; border-radius: 8px; }
 .assistant-product-results img { width: 62px; height: 55px; padding: 3px; object-fit: contain; background: white; border-radius: 6px; mix-blend-mode: multiply; }
@@ -1740,4 +1760,58 @@ footer { background: #1d1d1f; }
   .product-grid { grid-template-columns: 1fr; }
   .product-image { height: 280px; }
   .scenario-card { height: 450px; }
+}
+
+/* Soft graphite material for large dark surfaces.
+   Neutral ambient light prevents the cards from reading as flat black blocks. */
+.path-card.custom,
+.trust-boundary-section,
+.ai-selection-guide,
+.ai-configuration-companion,
+.ai-requirement-coach,
+.live-estimate-card,
+.sales-card,
+.ai-strip,
+.routing-rules {
+  border: 1px solid rgba(255,255,255,.1);
+  background:
+    radial-gradient(ellipse at 12% 0%, rgba(255,255,255,.12), transparent 38%),
+    radial-gradient(ellipse at 100% 100%, rgba(151,163,184,.09), transparent 44%),
+    linear-gradient(145deg, #292a2e 0%, #1a1b1e 55%, #222327 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.08),
+    0 26px 64px rgba(0,0,0,.11);
+}
+
+.path-card.custom {
+  background:
+    radial-gradient(circle at 16% 8%, rgba(255,255,255,.13), transparent 30%),
+    radial-gradient(circle at 96% 94%, rgba(151,163,184,.1), transparent 38%),
+    linear-gradient(145deg, #303136 0%, #1c1d20 62%, #242529 100%);
+}
+
+.trust-boundary-section {
+  background:
+    radial-gradient(ellipse at 12% 105%, rgba(255,255,255,.11), transparent 38%),
+    radial-gradient(ellipse at 86% 4%, rgba(160,169,186,.11), transparent 34%),
+    linear-gradient(135deg, #27282c 0%, #18191c 58%, #222327 100%);
+}
+
+.ai-selection-guide,
+.ai-configuration-companion,
+.ai-requirement-coach,
+.live-estimate-card {
+  background:
+    radial-gradient(ellipse at 88% 0%, rgba(255,255,255,.1), transparent 34%),
+    radial-gradient(ellipse at 0% 100%, rgba(151,163,184,.08), transparent 38%),
+    linear-gradient(140deg, #28292d 0%, #1b1c1f 68%, #232428 100%);
+  box-shadow:
+    inset 0 1px 0 rgba(255,255,255,.07),
+    0 18px 42px rgba(0,0,0,.09);
+}
+
+.path-card.custom:hover,
+.trust-boundary-section:hover,
+.live-estimate-card:hover {
+  border-color: rgba(255,255,255,.15);
 }

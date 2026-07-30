@@ -17,7 +17,7 @@ type AssistantContext = {
 };
 
 const providerBaseUrl = (process.env.AI_BASE_URL ?? "https://llm-ou0bo993n0k4i8b6.cn-beijing.maas.aliyuncs.com/compatible-mode/v1").replace(/\/$/, "");
-const providerModel = process.env.AI_MODEL ?? "qwen3.6-flash";
+const providerModel = process.env.AI_MODEL ?? "qwen3.7-flash";
 const requestWindows = new Map<string, { startedAt: number; count: number }>();
 
 function getClientId(request: Request) {
@@ -68,13 +68,12 @@ function contextMessage(context: AssistantContext) {
 }
 
 function extractText(content: unknown) {
-  if (typeof content === "string") return content.trim();
+  if (typeof content === "string") return content;
   if (!Array.isArray(content)) return "";
   return content
     .map((item) => typeof item === "object" && item && "text" in item ? String(item.text) : "")
     .filter(Boolean)
-    .join("\n")
-    .trim();
+    .join("");
 }
 
 function matchingProducts(text: string) {
@@ -161,7 +160,8 @@ export async function POST(request: Request) {
       },
       body: JSON.stringify({
         model: providerModel,
-        stream: false,
+        stream: true,
+        enable_thinking: false,
         max_tokens: 900,
         messages: [
           { role: "system", content: assistantSystemPrompt },
@@ -172,12 +172,8 @@ export async function POST(request: Request) {
       signal: controller.signal,
     });
 
-    const responseBody = await providerResponse.json().catch(() => null) as {
-      choices?: Array<{ message?: { content?: unknown } }>;
-      error?: { message?: string } | string;
-    } | null;
-
     if (!providerResponse.ok) {
+      clearTimeout(timeout);
       console.error("AI provider request failed", providerResponse.status);
       return Response.json({
         error: providerResponse.status === 401 || providerResponse.status === 403
@@ -186,22 +182,102 @@ export async function POST(request: Request) {
       }, { status: 502 });
     }
 
-    const answer = extractText(responseBody?.choices?.[0]?.message?.content);
-    if (!answer) {
+    if (!providerResponse.body) {
+      clearTimeout(timeout);
       return Response.json({ error: reply("AI 服务未返回有效内容，请换一种方式描述需求。", "The AI service returned no usable answer. Please rephrase your requirement.") }, { status: 502 });
     }
 
     const latestQuestion = messages[messages.length - 1].content;
-    return Response.json({
-      answer,
-      model: providerModel,
-      products: matchingProducts(`${latestQuestion}\n${answer}`),
-      boundary: reply(
-        "AI 建议基于已确认产品资料，最终选型、价格、库存与交期需由 JOYNEXT 销售或工程师确认。",
-        "AI guidance is based on verified product data. Final selection, price, stock and lead time require confirmation by JOYNEXT sales or engineering.",
-      ),
+    const boundary = reply(
+      "AI 建议基于已确认产品资料，最终选型、价格、库存与交期需由 JOYNEXT 销售或工程师确认。",
+      "AI guidance is based on verified product data. Final selection, price, stock and lead time require confirmation by JOYNEXT sales or engineering.",
+    );
+    const encoder = new TextEncoder();
+    const decoder = new TextDecoder();
+    const reader = providerResponse.body.getReader();
+    let downstreamCancelled = false;
+    const stream = new ReadableStream<Uint8Array>({
+      async start(streamController) {
+        let buffer = "";
+        let answer = "";
+        let closed = false;
+        const send = (event: string, data: object) => {
+          if (closed) return;
+          streamController.enqueue(encoder.encode(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`));
+        };
+        const consumeProviderLine = (line: string) => {
+          if (!line.startsWith("data:")) return;
+          const data = line.slice(5).trim();
+          if (!data || data === "[DONE]") return;
+          const chunk = JSON.parse(data) as {
+            choices?: Array<{ delta?: { content?: unknown } }>;
+          };
+          const content = extractText(chunk.choices?.[0]?.delta?.content);
+          if (!content) return;
+          answer += content;
+          send("delta", { content });
+        };
+
+        try {
+          send("ready", { model: providerModel });
+          while (true) {
+            const { done, value } = await reader.read();
+            buffer += decoder.decode(value, { stream: !done });
+            const lines = buffer.split(/\r?\n/);
+            buffer = lines.pop() ?? "";
+
+            for (const line of lines) {
+              consumeProviderLine(line);
+            }
+
+            if (done) break;
+          }
+          if (buffer.trim()) consumeProviderLine(buffer);
+
+          if (!answer.trim()) {
+            send("error", { error: reply("AI 服务未返回有效内容，请换一种方式描述需求。", "The AI service returned no usable answer. Please rephrase your requirement.") });
+            return;
+          }
+
+          send("done", {
+            model: providerModel,
+            products: matchingProducts(`${latestQuestion}\n${answer}`),
+            boundary,
+          });
+        } catch (error) {
+          console.error(
+            "AI assistant stream error",
+            error instanceof Error ? `${error.name}: ${error.message}` : "unknown",
+          );
+          send("error", {
+            error: error instanceof Error && error.name === "AbortError"
+              ? reply("AI 响应超时，请稍后重试。", "The AI response timed out. Please try again.")
+              : reply("AI 流式连接中断，请稍后重试。", "The AI stream was interrupted. Please try again."),
+          });
+        } finally {
+          clearTimeout(timeout);
+          closed = true;
+          if (!downstreamCancelled) streamController.close();
+          reader.releaseLock();
+        }
+      },
+      cancel() {
+        downstreamCancelled = true;
+        clearTimeout(timeout);
+        controller.abort();
+        void reader.cancel();
+      },
+    });
+
+    return new Response(stream, {
+      headers: {
+        "content-type": "text/event-stream; charset=utf-8",
+        "cache-control": "no-cache, no-transform",
+        "x-accel-buffering": "no",
+      },
     });
   } catch (error) {
+    clearTimeout(timeout);
     console.error(
       "AI assistant request error",
       error instanceof Error ? `${error.name}: ${error.message}` : "unknown",
@@ -211,7 +287,5 @@ export async function POST(request: Request) {
         ? reply("AI 响应超时，请稍后重试。", "The AI response timed out. Please try again.")
         : reply("AI 服务连接失败，请稍后重试或联系销售。", "Could not connect to the AI service. Please try again or contact sales."),
     }, { status: 502 });
-  } finally {
-    clearTimeout(timeout);
   }
 }

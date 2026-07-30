@@ -1,6 +1,8 @@
 "use client";
 
-import { createContext, FormEvent, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, FormEvent, useContext, useEffect, useMemo, useRef, useState } from "react";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
 import { productCatalog, type CatalogProduct } from "@/lib/product-catalog";
 import { localizeValue, stripRequiredMark, type ClientLocale } from "@/lib/client-i18n";
 
@@ -59,6 +61,7 @@ type LeadRecord = {
 type AssistantMessage = {
   role: "user" | "assistant";
   content: string;
+  streaming?: boolean;
   products?: Array<{
     id: string;
     name: string;
@@ -330,6 +333,7 @@ function AiAssistantDrawer({
   const [dismissedPromptId, setDismissedPromptId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const assistantIntro = c(
     "您好，我是 JOYNEXT 选型助理。请告诉我机器人类型、工作距离、接口、使用环境、项目阶段和预计数量，我会依据已确认资料帮您筛选产品。",
     "Hello, I’m the JOYNEXT product advisor. Tell me your robot type, working range, interface, environment, project stage and expected quantity, and I’ll shortlist products using verified information.",
@@ -340,6 +344,11 @@ function AiAssistantDrawer({
   }]);
 
   const composerValue = promptRequest && dismissedPromptId !== promptRequest.id ? promptRequest.text : input;
+  const latestMessageContent = messages[messages.length - 1]?.content;
+
+  useEffect(() => {
+    if (open) messagesEndRef.current?.scrollIntoView({ behavior: "smooth", block: "end" });
+  }, [latestMessageContent, open]);
 
   async function sendMessage(question?: string) {
     const content = (question ?? composerValue).trim();
@@ -369,20 +378,57 @@ function AiAssistantDrawer({
           },
         }),
       });
-      const data = await response.json() as {
-        answer?: string;
-        error?: string;
-        products?: AssistantMessage["products"];
-        boundary?: string;
+      if (!response.ok || !response.body) {
+        const data = await response.json().catch(() => null) as { error?: string } | null;
+        throw new Error(data?.error || c("AI 服务暂时不可用。", "The AI service is temporarily unavailable."));
+      }
+
+      setMessages([...nextMessages, { role: "assistant", content: "", streaming: true }]);
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+      let answer = "";
+      let streamError = "";
+      let products: AssistantMessage["products"];
+      let boundary: string | undefined;
+
+      const handleEvent = (block: string) => {
+        const event = block.split(/\r?\n/).find((line) => line.startsWith("event:"))?.slice(6).trim() ?? "message";
+        const dataText = block.split(/\r?\n/).filter((line) => line.startsWith("data:")).map((line) => line.slice(5).trim()).join("\n");
+        if (!dataText) return;
+        const data = JSON.parse(dataText) as {
+          content?: string;
+          error?: string;
+          products?: AssistantMessage["products"];
+          boundary?: string;
+        };
+        if (event === "delta" && data.content) {
+          answer += data.content;
+          setMessages((current) => current.map((message, index) =>
+            index === current.length - 1 ? { ...message, content: answer } : message));
+        } else if (event === "done") {
+          products = data.products;
+          boundary = data.boundary;
+        } else if (event === "error") {
+          streamError = data.error || c("AI 流式连接中断。", "The AI stream was interrupted.");
+        }
       };
-      if (!response.ok || !data.answer) throw new Error(data.error || c("AI 服务暂时不可用。", "The AI service is temporarily unavailable."));
-      setMessages((current) => [...current, {
-        role: "assistant",
-        content: data.answer!,
-        products: data.products,
-        boundary: data.boundary,
-      }]);
+
+      while (true) {
+        const { done, value } = await reader.read();
+        buffer += decoder.decode(value, { stream: !done });
+        const blocks = buffer.split(/\r?\n\r?\n/);
+        buffer = blocks.pop() ?? "";
+        blocks.forEach(handleEvent);
+        if (done) break;
+      }
+      if (buffer.trim()) handleEvent(buffer);
+      if (streamError) throw new Error(streamError);
+      if (!answer.trim()) throw new Error(c("AI 服务未返回有效内容。", "The AI service returned no usable answer."));
+      setMessages((current) => current.map((message, index) =>
+        index === current.length - 1 ? { ...message, content: answer, products, boundary, streaming: false } : message));
     } catch (requestError) {
+      setMessages((current) => current.map((message) => message.streaming ? { ...message, streaming: false } : message));
       setError(requestError instanceof Error ? requestError.message : c("AI 服务连接失败，请稍后重试。", "Could not connect to the AI service. Please try again."));
     } finally {
       setLoading(false);
@@ -418,10 +464,14 @@ function AiAssistantDrawer({
         </div>
         <div className="assistant-messages" aria-live="polite">
           {messages.map((message, index) => (
-            <article className={`assistant-message ${message.role}`} key={`${message.role}-${index}`}>
+            <article className={`assistant-message ${message.role}${message.streaming ? " streaming" : ""}`} key={`${message.role}-${index}`}>
               <span>{message.role === "assistant" ? "AI" : c("您", "You")}</span>
               <div>
-                <p>{message.content || assistantIntro}</p>
+                {message.role === "assistant" ? (
+                  <div className="assistant-markdown">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} skipHtml>{message.content || (index === 0 ? assistantIntro : "")}</ReactMarkdown>
+                  </div>
+                ) : <p>{message.content}</p>}
                 {message.products?.length ? (
                   <div className="assistant-product-results">
                     {message.products.map((result) => {
@@ -439,7 +489,8 @@ function AiAssistantDrawer({
               </div>
             </article>
           ))}
-          {loading && <article className="assistant-message assistant thinking"><span>AI</span><div><p>{c("正在查找匹配产品并整理建议", "Checking matching products and preparing recommendations")}<span className="thinking-dots">…</span></p></div></article>}
+          {loading && !messages.some((message) => message.streaming) && <article className="assistant-message assistant thinking"><span>AI</span><div><p>{c("正在连接产品知识库", "Connecting to the product knowledge base")}<span className="thinking-dots">…</span></p></div></article>}
+          <div ref={messagesEndRef} />
         </div>
         {messages.length === 1 && (
           <div className="assistant-quick-prompts">
