@@ -1595,41 +1595,70 @@ textarea {
 }
 
 /* Footer and fixed action */
-.floating-order-button {
-  width: auto;
-  min-width: 214px;
-  max-width: 280px;
-  grid-template-columns: 34px minmax(120px, 1fr) auto;
-  gap: var(--jn-space-3);
-  overflow: visible;
+.floating-order-button,
+.floating-order-button:focus-visible {
+  width: 58px;
+  min-width: 58px;
+  max-width: 58px;
+  grid-template-columns: 34px 0 0;
+  gap: 0;
+  padding: 8px 11px;
+  overflow: hidden;
   color: var(--color-foreground);
   background: var(--color-surface);
   border: 1px solid var(--color-border-strong);
-  border-radius: 0;
+  border-radius: 50%;
   box-shadow: 8px 8px 0 rgba(17, 17, 17, .12);
   backdrop-filter: none;
+  transition:
+    width var(--jn-duration-normal) var(--jn-ease),
+    min-width var(--jn-duration-normal) var(--jn-ease),
+    max-width var(--jn-duration-normal) var(--jn-ease),
+    border-radius var(--jn-duration-normal) var(--jn-ease),
+    transform var(--jn-duration-fast) ease,
+    box-shadow var(--jn-duration-fast) ease;
 }
 
 .floating-order-button > span:first-child {
+  width: 34px;
+  height: 34px;
   color: var(--color-on-accent);
   background: var(--color-accent);
-  border-radius: 0;
+  border-radius: 50%;
 }
 
 .floating-order-button > span:nth-child(2),
-.floating-order-button > i {
-  width: auto;
-  overflow: visible;
-  opacity: 1;
+.floating-order-button > i,
+.floating-order-button:focus-visible > span:nth-child(2),
+.floating-order-button:focus-visible > i {
+  width: 0;
+  overflow: hidden;
+  opacity: 0;
+  white-space: nowrap;
 }
 
 .floating-order-button small {
   color: var(--color-accent);
 }
 
-.floating-order-button:hover {
-  transform: translate(-2px, -2px);
-  box-shadow: 10px 10px 0 rgba(17, 17, 17, .14);
+@media (hover: hover) and (pointer: fine) {
+  .floating-order-button:hover {
+    width: 214px;
+    min-width: 214px;
+    max-width: 214px;
+    grid-template-columns: 34px minmax(120px, 1fr) auto;
+    gap: var(--jn-space-3);
+    border-radius: 0;
+    transform: translate(-2px, -2px);
+    box-shadow: 10px 10px 0 rgba(17, 17, 17, .14);
+  }
+
+  .floating-order-button:hover > span:nth-child(2),
+  .floating-order-button:hover > i {
+    width: auto;
+    overflow: visible;
+    opacity: 1;
+  }
 }
 
 .contact-footer {
