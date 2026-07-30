@@ -1006,7 +1006,7 @@ function Home({
             <article className="path-card custom" data-reveal style={{ "--reveal-delay": "100ms" } as React.CSSProperties}>
               <div className="path-topline"><span>02</span><b>ENGINEERING</b></div>
               <div className="path-icon">＋</div>
-              <div><h3>{c("方案与适配", "Solutions & adaptation")}</h3><p>{c("提交关键条件，由销售与工程师联合评估。", "Share key constraints for joint review.")}</p></div>
+              <div><h3>{c("定制需求单", "Custom request")}</h3><p>{c("提交关键条件，由销售与工程师联合评估。", "Share key constraints for joint review.")}</p></div>
               <button className="dark-button" onClick={() => onNavigate("custom")}>{c("提交项目需求", "Submit project requirements")} <span>→</span></button>
             </article>
           </div>
