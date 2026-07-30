@@ -3360,3 +3360,9 @@ footer { background: #1d1d1f; }
   }
   .contact-footer { padding-top: 68px; }
 }
+
+/* Keep the contact area on the same light canvas as the storefront. */
+footer.contact-footer {
+  color: var(--storefront-ink, #1d1d1f);
+  background: #f5f5f7;
+}

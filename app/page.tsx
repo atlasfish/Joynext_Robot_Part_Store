@@ -1808,7 +1808,7 @@ function Footer() {
     <footer className="contact-footer" id="contact">
       <div className="contact-footer-intro">
         <span>CONTACT JOYNEXT</span>
-        <h2>{c("让销售与工程团队继续协助", "Continue with sales and engineering")}</h2>
+        <h2>{c("联系我们", "Contact us")}</h2>
         <p>{c("发送产品型号、数量和项目阶段，我们会安排后续沟通。", "Share the model, quantity and project stage for follow-up.")}</p>
       </div>
       <div className="contact-footer-methods">
