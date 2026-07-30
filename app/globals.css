@@ -3537,3 +3537,29 @@ footer.contact-footer {
     border-radius: 50%;
   }
 }
+
+/* Lock the hero cutout to a stable visual stage on desktop. */
+@media (min-width: 981px) {
+  .hero-minimal .hero-grid {
+    grid-template-columns: minmax(0, .84fr) minmax(0, 1.16fr);
+  }
+  .hero-minimal .hero-product-stage {
+    position: relative;
+    width: 100%;
+    height: min(620px, calc(100svh - 138px));
+    min-height: 460px;
+    overflow: visible;
+  }
+  .hero-minimal .hero-product-stage > img {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: clamp(640px, 44vw, 860px);
+    max-width: none;
+    max-height: min(590px, 68vh);
+    height: auto;
+    object-fit: contain;
+    transform: translate(-50%, -50%);
+    transform-origin: center;
+  }
+}
