@@ -586,7 +586,7 @@ function Header({
       <nav aria-label={c("主导航", "Main navigation")}>
         <div className="product-nav-menu">
           <button className="product-nav-trigger" onClick={() => onNavigateCategory("全部产品")} aria-haspopup="menu">
-            {c("产品", "Products")} <span>⌄</span>
+            {c("产品", "Products")} <span aria-hidden="true" />
           </button>
           <div className="product-nav-dropdown" role="menu">
             {[
@@ -596,7 +596,7 @@ function Header({
               ["环境感知", c("环境感知", "Environment sensing")],
               ["运动感知", c("运动感知", "Motion sensing")],
             ].map(([category, label]) => (
-              <button role="menuitem" key={category} onClick={() => onNavigateCategory(category)}>{label}<span>→</span></button>
+              <button role="menuitem" key={category} onClick={() => onNavigateCategory(category)}>{label}</button>
             ))}
           </div>
         </div>
