@@ -289,6 +289,19 @@ function Logo({ inverse = false, onClick }: { inverse?: boolean; onClick?: () =>
   );
 }
 
+function PurchaseIcon() {
+  return (
+    <span className="purchase-icon" aria-hidden="true">
+      <svg viewBox="0 0 24 24" fill="none">
+        <path d="M3 4h2.2l1.6 9.1h9.7l2-6.5H6" />
+        <path d="M8.5 17.5h7" />
+        <circle cx="8.5" cy="19" r="1.25" />
+        <circle cx="16" cy="19" r="1.25" />
+      </svg>
+    </span>
+  );
+}
+
 function MotionEffects() {
   useEffect(() => {
     const root = document.documentElement;
@@ -593,7 +606,7 @@ function Header({
       </nav>
       <div className="header-actions">
         <button className="header-procurement-button" onClick={onOpenProcurement} aria-label={c(`查看采购单，已有 ${procurementCount} 项`, `View procurement list, ${procurementCount} items`)}>
-          <span>▣</span><b>{c("采购单", "Procurement")}</b><i>{procurementCount}</i>
+          <PurchaseIcon /><b>{c("采购单", "Procurement")}</b><i>{procurementCount}</i>
         </button>
         <button className="language-switch" onClick={() => setLocale(locale === "zh" ? "en" : "zh")} aria-label={c("切换为英文", "Switch to Chinese")}>
           <span className={locale === "zh" ? "active" : ""}>中</span><i /> <span className={locale === "en" ? "active" : ""}>EN</span>
@@ -655,7 +668,7 @@ function ProcurementDrawer({
               </article>
             );
           }) : (
-            <div className="procurement-drawer-empty"><span>▣</span><b>{c("采购单还是空的", "Your procurement list is empty")}</b><p>{c("可从 AI 推荐结果点击“＋”加入。", "Use “+” on an AI recommendation to add a product.")}</p></div>
+            <div className="procurement-drawer-empty"><PurchaseIcon /><b>{c("采购单还是空的", "Your procurement list is empty")}</b><p>{c("可从 AI 推荐结果点击“＋”加入。", "Use “+” on an AI recommendation to add a product.")}</p></div>
           )}
         </div>
         <footer>
@@ -1818,7 +1831,7 @@ function FloatingOrderButton({ onClick }: { onClick: () => void }) {
   const { c } = useClientCopy();
   return (
     <button className="floating-order-button" onClick={onClick} aria-label={c("前往产品采购入口", "Go to purchase options")}>
-      <span>▣</span>
+      <PurchaseIcon />
       <span><small>PURCHASE REQUEST</small><b>{c("提交采购意向", "Request a quote")}</b></span>
       <i>→</i>
     </button>

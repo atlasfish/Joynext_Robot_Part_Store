@@ -69,6 +69,8 @@ test("streams non-thinking Qwen responses and renders Markdown safely", async ()
   assert.match(page, /source: procurementItems\.length > 1 \? "集采报单"/);
   assert.match(page, /header-procurement-button/);
   assert.match(page, /function ProcurementDrawer/);
+  assert.match(page, /function PurchaseIcon/);
+  assert.doesNotMatch(page, /▣/);
   assert.match(page, /onAddProduct\(product\)/);
   assert.match(page, /待配置/);
   assert.match(page, /product-nav-dropdown/);

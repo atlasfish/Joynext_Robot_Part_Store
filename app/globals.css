@@ -1370,6 +1370,19 @@ button { letter-spacing: -.01em; }
 html { background: #f5f5f7; }
 body { overflow-x: clip; color: #1d1d1f; background: #fff; }
 button, input, select, textarea { font-family: inherit; }
+.purchase-icon {
+  display: inline-grid;
+  place-items: center;
+  flex: 0 0 auto;
+}
+.purchase-icon svg {
+  width: 18px;
+  height: 18px;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
 
 .site-header {
   height: 64px;
