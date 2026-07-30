@@ -851,24 +851,6 @@ function Home({
               </label>
               <button type="submit" className="primary-button">{query.trim() ? c("查看匹配", "View matches") : c("帮我选型", "Find a product")}</button>
             </form>
-            <div className="hot-searches">
-              <span>{c("常见需求", "Common needs")}</span>
-              {[
-                ["AMR 避障", "AMR obstacle avoidance"],
-                ["人形机器人姿态", "Humanoid attitude sensing"],
-                ["三维感知", "3D perception"],
-                ["硬实时控制", "Hard real-time control"],
-              ].map(([zh, en]) => (
-                <button key={zh} onClick={() => onAskAi(locale === "zh" ? `请围绕“${zh}”帮我澄清需求并推荐 JOYNEXT 产品方案。` : `Help clarify my requirements for “${en}” and recommend suitable JOYNEXT products.`)}>{c(zh, en)}</button>
-              ))}
-            </div>
-            <div className="hero-proof">
-              <span><b>{products.length}</b><small>{c("个产品方向", "product options")}</small></span>
-              <i />
-              <span><b>{c("参数可追溯", "Traceable data")}</b><small>{c("标注资料来源", "Source-referenced")}</small></span>
-              <i />
-              <span><b>{c("专业协助", "Specialist support")}</b><small>{c("销售与工程确认", "Sales & engineering")}</small></span>
-            </div>
           </div>
           <div className="hero-product-stage" data-reveal data-parallax="slow">
             <div className="product-halo" />

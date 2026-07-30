@@ -2636,3 +2636,18 @@ footer { background: #1d1d1f; }
   .contact-footer-bottom { grid-template-columns: 1fr; }
   .contact-footer-bottom > div { flex-wrap: wrap; }
 }
+
+/* Keep the opening message focused on one action. */
+.hero-copy { max-width: 650px; }
+.hero-copy > p {
+  max-width: 510px;
+  margin-bottom: 24px;
+}
+.hero-copy .search-box { max-width: 610px; }
+
+@media (min-width: 1200px) {
+  .hero-grid {
+    grid-template-columns: minmax(0, .94fr) minmax(0, 1.06fr);
+    gap: clamp(58px, 6vw, 84px);
+  }
+}
