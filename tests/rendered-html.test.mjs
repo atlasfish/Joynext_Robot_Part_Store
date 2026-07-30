@@ -64,4 +64,25 @@ test("streams non-thinking Qwen responses and renders Markdown safely", async ()
   assert.match(page, /集采报单已生成/);
   assert.match(page, /打印 \/ 保存报单/);
   assert.match(page, /source: procurementItems\.length > 1 \? "集采报单"/);
+  assert.match(page, /header-procurement-button/);
+  assert.match(page, /function ProcurementDrawer/);
+  assert.match(page, /onAddProduct\(product\)/);
+  assert.match(page, /待配置/);
+});
+
+test("provides demo product publishing operations without a backend", async () => {
+  const admin = await readFile(new URL("../app/admin/page.tsx", import.meta.url), "utf8");
+  const storefront = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const operations = await readFile(new URL("../lib/product-operations.ts", import.meta.url), "utf8");
+
+  assert.match(admin, /商品运营/);
+  assert.match(admin, /立即上线/);
+  assert.match(admin, /临时下线/);
+  assert.match(admin, /定时预售/);
+  assert.match(admin, /新增商品/);
+  assert.match(admin, /PRODUCT_OPERATIONS_STORAGE_KEY/);
+  assert.match(storefront, /storefrontProducts/);
+  assert.match(storefront, /storefront-availability/);
+  assert.match(operations, /joynext-demo-products-v1/);
+  assert.match(operations, /2026-08-15T10:00/);
 });

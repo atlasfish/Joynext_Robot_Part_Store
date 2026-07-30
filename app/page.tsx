@@ -1,22 +1,33 @@
 "use client";
 
-import { createContext, FormEvent, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { createContext, Dispatch, FormEvent, SetStateAction, useContext, useEffect, useMemo, useRef, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import { productCatalog, type CatalogProduct } from "@/lib/product-catalog";
 import { localizeValue, type ClientLocale } from "@/lib/client-i18n";
+import {
+  createDefaultManagedProducts,
+  formatPublicationState,
+  parseManagedProducts,
+  PRODUCT_OPERATIONS_STORAGE_KEY,
+  type ManagedProduct,
+} from "@/lib/product-operations";
 
 type View = "home" | "standard" | "custom";
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const withBasePath = (path: string) => `${basePath}${path}`;
 
-type Product = Omit<CatalogProduct, "image"> & { image: string };
+type Product = Omit<ManagedProduct, "image"> & { image: string };
 
 type ProcurementItem = {
   productId: string;
   quantity: number;
   configuration: Record<string, string>;
 };
+
+type ConfigurationTarget = {
+  productId: string;
+  requestId: number;
+} | null;
 
 type DiscoveryBrief = {
   scene: "AMR / AGV" | "人形机器人" | "协作机械臂" | "服务机器人";
@@ -40,7 +51,7 @@ type LeadStatus = "新线索" | "工程评审" | "销售跟进" | "培育中" | 
 type LeadRecord = {
   id: string;
   createdAt: string;
-  source: "标准订单" | "定制需求";
+  source: "标准订单" | "集采报单" | "定制需求";
   company: string;
   companyType: string;
   contact: string;
@@ -96,6 +107,19 @@ const LocaleContext = createContext<LocaleContextValue>({
   setLocale: () => undefined,
 });
 
+const defaultProducts: Product[] = createDefaultManagedProducts()
+  .filter((product) => product.publication.lifecycle !== "offline")
+  .map((product) => ({
+    ...product,
+    image: withBasePath(product.image),
+  }));
+
+const ProductCatalogContext = createContext<Product[]>(defaultProducts);
+
+function useProductCatalog() {
+  return useContext(ProductCatalogContext);
+}
+
 function useClientCopy() {
   const { locale, setLocale } = useContext(LocaleContext);
   return {
@@ -105,11 +129,6 @@ function useClientCopy() {
     v: (value: string) => localizeValue(locale, value),
   };
 }
-
-const products: Product[] = productCatalog.map((product) => ({
-  ...product,
-  image: withBasePath(product.image),
-}));
 
 const standardUnitPriceRanges: Record<string, { low: number; high: number }> = {
   fisheye: { low: 1800, high: 3200 },
@@ -130,6 +149,12 @@ function standardPriceLabel(productId: string, locale: ClientLocale, quantity = 
   return `¥${low.toLocaleString()}–¥${high.toLocaleString()}${quantity === 1 ? " / 件" : ""}`;
 }
 
+function productPriceLabel(product: Product, locale: ClientLocale, quantity = 1) {
+  if (standardUnitPriceRanges[product.id]) return standardPriceLabel(product.id, locale, quantity);
+  if (product.price && product.price !== "价格待确认") return product.price;
+  return locale === "en" ? "Quoted after review" : "评估后报价";
+}
+
 const discoveryGoals: DiscoveryBrief["goal"][] = [
   "导航与避障",
   "姿态与平衡",
@@ -139,7 +164,7 @@ const discoveryGoals: DiscoveryBrief["goal"][] = [
 
 const discoveryScenes: DiscoveryBrief["scene"][] = ["AMR / AGV", "人形机器人", "协作机械臂", "服务机器人"];
 
-function recommendProducts(brief: DiscoveryBrief) {
+function recommendProducts(brief: DiscoveryBrief, products: Product[]) {
   const goalBoost: Record<DiscoveryBrief["goal"], Partial<Record<Product["id"], number>>> = {
     "导航与避障": { "depth-48": 10, fisheye: 7, "imu-mcu": 3, "controller-h1": 1 },
     "姿态与平衡": { "imu-mcu": 10, "imu-no-mcu": 8, "controller-h1": 4 },
@@ -325,6 +350,8 @@ function AiAssistantDrawer({
   view,
   promptRequest,
   onSelectProduct,
+  procurementItems,
+  onAddProduct,
 }: {
   open: boolean;
   onClose: () => void;
@@ -333,8 +360,11 @@ function AiAssistantDrawer({
   view: View;
   promptRequest: AssistantPrompt | null;
   onSelectProduct: (product: Product) => void;
+  procurementItems: ProcurementItem[];
+  onAddProduct: (product: Product) => void;
 }) {
   const { locale, c, v } = useClientCopy();
+  const products = useProductCatalog();
   const [input, setInput] = useState("");
   const [dismissedPromptId, setDismissedPromptId] = useState<number | null>(null);
   const [loading, setLoading] = useState(false);
@@ -482,11 +512,18 @@ function AiAssistantDrawer({
                   <div className="assistant-product-results">
                     {message.products.map((result) => {
                       const product = products.find((item) => item.id === result.id);
+                      if (!product) return null;
+                      const procurementItem = procurementItems.find((item) => item.productId === product.id);
                       return (
-                        <button key={result.id} onClick={() => product && onSelectProduct(product)}>
-                          <img src={withBasePath(result.image)} alt="" />
-                          <span><small>{result.model} · {v(result.status)}</small><b>{v(result.name)}</b><em>{result.verified.slice(0, 2).map(v).join(" · ")}</em></span>
-                        </button>
+                        <article key={result.id}>
+                          <button className="assistant-product-open" onClick={() => onSelectProduct(product)}>
+                            <img src={withBasePath(result.image)} alt="" />
+                            <span><small>{result.model} · {v(result.status)}</small><b>{v(result.name)}</b><em>{result.verified.slice(0, 2).map(v).join(" · ")}</em></span>
+                          </button>
+                          <button className={procurementItem ? "assistant-product-add added" : "assistant-product-add"} onClick={() => onAddProduct(product)} aria-label={c(`将 ${product.model} 加入采购单`, `Add ${product.model} to procurement list`)}>
+                            {procurementItem ? "✓" : "＋"}
+                          </button>
+                        </article>
                       );
                     })}
                   </div>
@@ -518,10 +555,14 @@ function Header({
   onNavigate,
   onNavigateSection,
   onOpenAssistant,
+  procurementCount,
+  onOpenProcurement,
 }: {
   onNavigate: (view: View) => void;
   onNavigateSection: (sectionId: string) => void;
   onOpenAssistant: () => void;
+  procurementCount: number;
+  onOpenProcurement: () => void;
 }) {
   const { locale, setLocale, c } = useClientCopy();
   return (
@@ -534,6 +575,9 @@ function Header({
         <button onClick={() => onNavigateSection("support")}>{c("选型支持", "Selection support")}</button>
       </nav>
       <div className="header-actions">
+        <button className="header-procurement-button" onClick={onOpenProcurement} aria-label={c(`查看采购单，已有 ${procurementCount} 项`, `View procurement list, ${procurementCount} items`)}>
+          <span>▣</span><b>{c("采购单", "Procurement")}</b><i>{procurementCount}</i>
+        </button>
         <button className="language-switch" onClick={() => setLocale(locale === "zh" ? "en" : "zh")} aria-label={c("切换为英文", "Switch to Chinese")}>
           <span className={locale === "zh" ? "active" : ""}>中</span><i /> <span className={locale === "en" ? "active" : ""}>EN</span>
         </button>
@@ -541,6 +585,68 @@ function Header({
         <button className="outline-button compact" onClick={() => onNavigate("custom")}>{c("提交需求", "Request a quote")}</button>
       </div>
     </header>
+  );
+}
+
+function ProcurementDrawer({
+  open,
+  items,
+  onClose,
+  onConfigure,
+  onRemove,
+}: {
+  open: boolean;
+  items: ProcurementItem[];
+  onClose: () => void;
+  onConfigure: (product: Product) => void;
+  onRemove: (productId: string) => void;
+}) {
+  const { locale, c, v } = useClientCopy();
+  const products = useProductCatalog();
+  const lines = items.map((item) => ({
+    ...item,
+    product: products.find((product) => product.id === item.productId),
+  })).filter((item): item is ProcurementItem & { product: Product } => Boolean(item.product));
+  const totalQuantity = lines.reduce((total, item) => total + item.quantity, 0);
+
+  return (
+    <div className={open ? "procurement-drawer-layer open" : "procurement-drawer-layer"} aria-hidden={!open}>
+      <button className="procurement-drawer-backdrop" onClick={onClose} aria-label={c("关闭采购单", "Close procurement list")} />
+      <aside className="procurement-drawer" aria-label={c("实时采购单", "Live procurement list")}>
+        <header>
+          <div><small>PROCUREMENT LIST</small><h2>{c("采购单", "Procurement")}</h2></div>
+          <button onClick={onClose} aria-label={c("关闭", "Close")}>×</button>
+        </header>
+        <div className="procurement-drawer-summary">
+          <span>{lines.length} {c("项产品", "items")}</span>
+          <span>{totalQuantity} {c("件", "pcs")}</span>
+        </div>
+        <div className="procurement-drawer-items">
+          {lines.length ? lines.map((item) => {
+            const configured = Object.keys(item.configuration).length > 0;
+            return (
+              <article key={item.productId}>
+                <img src={item.product.image} alt="" />
+                <div>
+                  <small>{item.product.model}</small>
+                  <strong>{v(item.product.name)}</strong>
+                  <span className={configured ? "configured" : "pending"}>{configured ? c("已配置", "Configured") : c("待配置", "Configuration required")}</span>
+                  <em>{item.quantity} {c("件", "pcs")} · {productPriceLabel(item.product, locale, item.quantity)}</em>
+                </div>
+                <button className="configure" onClick={() => onConfigure(item.product)}>{configured ? c("修改", "Edit") : c("去配置", "Configure")} →</button>
+                <button className="remove" onClick={() => onRemove(item.productId)} aria-label={c("移除产品", "Remove product")}>×</button>
+              </article>
+            );
+          }) : (
+            <div className="procurement-drawer-empty"><span>▣</span><b>{c("采购单还是空的", "Your procurement list is empty")}</b><p>{c("可从 AI 推荐结果点击“＋”加入。", "Use “+” on an AI recommendation to add a product.")}</p></div>
+          )}
+        </div>
+        <footer>
+          <p>{c("待配置产品需完善接口、环境和数量后提交。", "Complete interface, environment and quantity before submission.")}</p>
+          <button disabled={!lines.length} onClick={() => lines[0] && onConfigure(lines[0].product)}>{c("进入采购单", "Open procurement list")} →</button>
+        </footer>
+      </aside>
+    </div>
   );
 }
 
@@ -575,7 +681,8 @@ function AiDiscoveryWorkspace({
   onAskAi: (prompt: string) => void;
 }) {
   const { locale, c, v } = useClientCopy();
-  const recommendations = useMemo(() => recommendProducts(brief), [brief]);
+  const products = useProductCatalog();
+  const recommendations = useMemo(() => recommendProducts(brief, products), [brief, products]);
   const primary = recommendations[0];
 
   const startConfiguration = (product: Product) => {
@@ -658,9 +765,10 @@ function Home({
   onAskAi: (prompt: string) => void;
 }) {
   const { locale, c, v } = useClientCopy();
+  const products = useProductCatalog();
   const [query, setQuery] = useState("");
   const [catalogFilter, setCatalogFilter] = useState("为你推荐");
-  const recommendations = useMemo(() => recommendProducts(brief), [brief]);
+  const recommendations = useMemo(() => recommendProducts(brief, products), [brief, products]);
   const recommendedId = recommendations[0].product.id;
   const catalogFilters = ["为你推荐", "全部产品", "计算与控制", "3D 感知", "环境感知", "运动感知"];
   const visible = useMemo(() => {
@@ -673,7 +781,7 @@ function Home({
     if (catalogFilter === "为你推荐") return recommendations.slice(0, 4).map(({ product }) => product);
     if (catalogFilter === "全部产品") return products;
     return products.filter((product) => product.kind === catalogFilter);
-  }, [catalogFilter, locale, query, recommendations]);
+  }, [catalogFilter, locale, products, query, recommendations]);
 
   function startSearch(event: FormEvent) {
     event.preventDefault();
@@ -773,7 +881,7 @@ function Home({
                 const scene = scenario.name === "机械臂" ? "协作机械臂" : scenario.name as DiscoveryBrief["scene"];
                 const nextBrief = { ...brief, scene };
                 onBriefChange(nextBrief);
-                onSelect(recommendProducts(nextBrief)[0].product);
+                onSelect(recommendProducts(nextBrief, products)[0].product);
                 onNavigate("standard");
               }}>
                 <img src={scenario.image} alt="" />
@@ -801,8 +909,10 @@ function Home({
             {query && <button className="clear-search" onClick={() => setQuery("")}>{c("清除", "Clear")} “{query}” ×</button>}
           </div>
           <div className="product-grid">
-            {visible.map((product, index) => (
-              <article className={product.id === recommendedId ? "product-card ai-recommended" : "product-card"} data-reveal style={{ "--reveal-delay": `${index * 70}ms` } as React.CSSProperties} key={product.id}>
+            {visible.map((product, index) => {
+              const publication = formatPublicationState(product);
+              return (
+              <article className={product.id === recommendedId ? "product-card ai-recommended" : "product-card"} data-publication={publication.state} data-reveal style={{ "--reveal-delay": `${index * 70}ms` } as React.CSSProperties} key={product.id}>
                 <div className="product-image">
                   <span>{v(product.kind)}</span>
                   {product.id === recommendedId && <b className="ai-match-badge">{c("优先匹配", "Top match")} · {recommendations[0].score}%</b>}
@@ -815,19 +925,24 @@ function Home({
                   <p>{v(product.description)}</p>
                   <div className={standardUnitPriceRanges[product.id] ? "product-price-preview available" : "product-price-preview"}>
                     <small>{standardUnitPriceRanges[product.id] ? c("参考单价", "Indicative unit price") : c("价格方式", "Pricing")}</small>
-                    <strong>{standardPriceLabel(product.id, locale)}</strong>
+                    <strong>{productPriceLabel(product, locale)}</strong>
                     <em>{standardUnitPriceRanges[product.id]
                       ? c("仅供参考 · 具体价格请与销售确认", "For reference · Confirm with sales")
                       : c("根据最终方案与工程范围确认", "Confirmed against final solution and scope")}</em>
                   </div>
                   <div className="spec-chips">{product.verified.slice(0, 2).map((spec) => <span key={spec}>{v(spec)}</span>)}</div>
+                  <div className={`storefront-availability ${publication.state}`}>
+                    <span>{product.publication.storefrontBadge || c("开放询价", "Open for inquiry")}</span>
+                    <p><b>{c(publication.label, publication.state === "scheduled" ? "Scheduled presale" : publication.state === "presale" ? "Presale" : "Available")}</b><small>{locale === "zh" ? publication.detail : product.publication.expectedDelivery || product.publication.stockStatus}</small></p>
+                  </div>
                   <div className="product-foot">
                     <button onClick={() => onAskAi(locale === "zh" ? `请解释 ${product.model} ${product.name} 的能力、适用场景、与相近产品的差异，以及哪些信息仍需工程师确认。` : `Explain ${product.model} ${v(product.name)}, its suitable applications, differences from similar products, and what still needs engineering confirmation.`)}>{c("咨询产品", "Ask about product")}</button>
-                    <button onClick={() => { onSelect(product); onNavigate("standard"); }}>{c("查看配置", "Configure")} <span>↗</span></button>
+                    <button onClick={() => { onSelect(product); onNavigate("standard"); }}>{publication.state === "scheduled" ? c("查看预售", "View presale") : c("查看配置", "Configure")} <span>↗</span></button>
                   </div>
                 </div>
               </article>
-            ))}
+              );
+            })}
           </div>
           {!visible.length && <div className="catalog-empty"><b>{c("暂未找到匹配产品", "No matching product found")}</b><p>{c("请尝试其他关键词，或描述用途、距离与接口，让选型助理继续查找。", "Try another keyword or describe the task, range and interface so the advisor can continue the search.")}</p><button onClick={() => onAskAi(locale === "zh" ? `请根据这个需求推荐可用产品：${query}` : `Recommend available products for this requirement: ${query}`)}>{c("继续查找", "Continue with advisor")} →</button></div>}
         </section>
@@ -882,15 +997,19 @@ function ProductList({
   recommendedId: string;
 }) {
   const { locale, c, v } = useClientCopy();
+  const products = useProductCatalog();
   return (
     <div className="selection-grid">
-      {products.map((product) => (
+      {products.map((product) => {
+        const publication = formatPublicationState(product);
+        return (
         <button className={product.id === selected.id ? "select-card selected" : "select-card"} onClick={() => onSelect(product)} key={product.id}>
           <div className="select-image"><img src={product.image} alt="" /><span>{v(product.kind)}</span>{product.id === recommendedId && <b className="ai-select-match">{c("优先匹配", "Top match")}</b>}</div>
           <div><small>{product.model}</small><h3>{v(product.name)}</h3><p>{v(product.description)}</p></div>
-          <div className="select-bottom"><strong>{standardPriceLabel(product.id, locale)}</strong><span>{v(product.lead)}</span></div>
+          <div className="select-bottom"><strong>{productPriceLabel(product, locale)}</strong><span>{publication.state === "scheduled" ? publication.detail : v(product.lead)}</span></div>
         </button>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -905,6 +1024,9 @@ function StandardFlow({
   brief,
   onBriefChange,
   onAskAi,
+  procurementItems,
+  setProcurementItems,
+  configurationTarget,
 }: {
   selected: Product;
   onSelect: (p: Product) => void;
@@ -915,12 +1037,15 @@ function StandardFlow({
   brief: DiscoveryBrief;
   onBriefChange: (brief: DiscoveryBrief) => void;
   onAskAi: (prompt: string) => void;
+  procurementItems: ProcurementItem[];
+  setProcurementItems: Dispatch<SetStateAction<ProcurementItem[]>>;
+  configurationTarget: ConfigurationTarget;
 }) {
   const { locale, c, v } = useClientCopy();
-  const [step, setStep] = useState(1);
-  const [qty, setQty] = useState(1);
+  const products = useProductCatalog();
+  const [step, setStep] = useState(configurationTarget?.productId === selected.id ? 2 : 1);
+  const [qty, setQty] = useState(() => procurementItems.find((item) => item.productId === selected.id)?.quantity ?? 1);
   const [productConfigurations, setProductConfigurations] = useState<Record<string, Record<string, string>>>({});
-  const [procurementItems, setProcurementItems] = useState<ProcurementItem[]>([]);
   const [orderId, setOrderId] = useState("");
   const [customer, setCustomer] = useState<StandardCustomer>({
     company: "",
@@ -934,9 +1059,11 @@ function StandardFlow({
   });
   const updateCustomer = (key: keyof StandardCustomer, value: string) =>
     setCustomer((current) => ({ ...current, [key]: value }));
-  const configuration = productConfigurations[selected.id]
-    ?? Object.fromEntries(selected.configuration.map((item) => [item.key, item.options[0]]));
   const selectedProcurementItem = procurementItems.find((item) => item.productId === selected.id);
+  const configuration = productConfigurations[selected.id]
+    ?? (selectedProcurementItem && Object.keys(selectedProcurementItem.configuration).length
+      ? selectedProcurementItem.configuration
+      : Object.fromEntries(selected.configuration.map((item) => [item.key, item.options[0]])));
   const setConfigurationValue = (key: string, value: string) =>
     setProductConfigurations((current) => ({
       ...current,
@@ -944,12 +1071,14 @@ function StandardFlow({
     }));
   const engineering = selected.engineeringReview;
   const primaryInterface = configuration.interface ?? configuration.realtime ?? configuration.network ?? "按所选方案";
-  const estimatedTotalLabel = standardPriceLabel(selected.id, locale, qty);
+  const estimatedTotalLabel = productPriceLabel(selected, locale, qty);
   const procurementProducts = procurementItems.map((item) => ({
     ...item,
     product: products.find((product) => product.id === item.productId)!,
   })).filter((item) => item.product);
   const totalProcurementQuantity = procurementItems.reduce((total, item) => total + item.quantity, 0);
+  const pendingConfigurationCount = procurementItems.filter((item) => Object.keys(item.configuration).length === 0).length;
+  const allProcurementConfigured = procurementItems.length > 0 && pendingConfigurationCount === 0;
   const pricedProcurementItems = procurementItems.filter((item) => standardUnitPriceRanges[item.productId]);
   const procurementPriceRange = pricedProcurementItems.reduce((total, item) => {
     const range = standardUnitPriceRanges[item.productId];
@@ -966,7 +1095,7 @@ function StandardFlow({
   const customerComplete = [customer.company, customer.contact, customer.contactDetail, customer.country, customer.city, customer.address]
     .every((value) => value.trim().length > 0);
   const customerLocation = `${v(customer.country)} · ${customer.city}`;
-  const recommendations = useMemo(() => recommendProducts(brief), [brief]);
+  const recommendations = useMemo(() => recommendProducts(brief, products), [brief, products]);
   const recommended = recommendations[0];
   const selectedMatch = recommendations.find((item) => item.product.id === selected.id) ?? recommendations[0];
   const configurationSignals = [
@@ -1026,7 +1155,7 @@ function StandardFlow({
   }
 
   function submitStandardOrder() {
-    if (!customerComplete || procurementItems.length === 0 || orderId) return;
+    if (!customerComplete || !allProcurementConfigured || orderId) return;
     // The request number is generated only in this user-triggered submit handler.
     // eslint-disable-next-line react-hooks/purity
     const id = `JN-20260729-${Date.now().toString().slice(-4)}`;
@@ -1218,11 +1347,12 @@ function StandardFlow({
               {engineering && <small>{c("该产品需工程评估，不能直接加入标准件集采报单。", "This product requires engineering review and cannot be added to a standard procurement request.")}</small>}
             </div>
             <div className="procurement-items">
-              {procurementProducts.length ? procurementProducts.map(({ product, quantity }) => (
+              {procurementProducts.length ? procurementProducts.map(({ product, quantity, configuration: itemConfiguration }) => (
                 <article key={product.id}>
                   <img src={product.image} alt="" />
-                  <div><small>{product.model}</small><strong>{v(product.name)}</strong><em>{standardPriceLabel(product.id, locale, quantity)}</em></div>
+                  <div><small>{product.model}</small><strong>{v(product.name)}</strong><em>{Object.keys(itemConfiguration).length ? productPriceLabel(product, locale, quantity) : c("待配置", "Configuration required")}</em></div>
                   <div className="procurement-item-actions">
+                    {!Object.keys(itemConfiguration).length && <button type="button" className="configure-pending" onClick={() => selectProcurementProduct(product)}>{c("去配置", "Configure")}</button>}
                     <button type="button" onClick={() => updateProcurementQuantity(product.id, quantity - 1)}>−</button>
                     <span>{quantity}</span>
                     <button type="button" onClick={() => updateProcurementQuantity(product.id, quantity + 1)}>＋</button>
@@ -1240,8 +1370,9 @@ function StandardFlow({
             <p className="small-note">{customerComplete
               ? locale === "zh" ? `客户：${customer.company} · ${customerLocation}。` : `Customer: ${customer.company} · ${customerLocation}. `
               : c("请完整填写公司、联系人和收货地址后提交。", "Complete the company, contact and delivery details before submitting. ")}
+              {pendingConfigurationCount ? c(`尚有 ${pendingConfigurationCount} 项产品待配置。`, `${pendingConfigurationCount} items still require configuration. `) : ""}
               {c("页面信息不构成正式报价，最终以 JOYNEXT 报价单或订单确认为准。", "Information shown here is not a formal quotation. Final terms are subject to a JOYNEXT quotation or order confirmation.")}</p>
-            <button className="primary-button full" disabled={!procurementItems.length || !customerComplete} onClick={submitStandardOrder}>{c("一次提交并生成报单", "Submit and create request")} →</button>
+            <button className="primary-button full" disabled={!allProcurementConfigured || !customerComplete} onClick={submitStandardOrder}>{c("一次提交并生成报单", "Submit and create request")} →</button>
             {engineering && <button className="outline-button full" onClick={onCustom}>{c("申请工程评估", "Request engineering review")}</button>}
           </aside>
         </section>
@@ -1266,7 +1397,7 @@ function StandardFlow({
                 <img src={product.image} alt="" />
                 <div><small>{product.model}</small><strong>{v(product.name)}</strong><p>{Object.values(itemConfiguration).slice(0, 3).map(v).join(" · ")}</p></div>
                 <b>× {quantity}</b>
-                <em>{standardPriceLabel(product.id, locale, quantity)}</em>
+                <em>{productPriceLabel(product, locale, quantity)}</em>
               </article>
             ))}
             <p>{c("仅供参考，正式价格与交付以销售确认为准。", "For reference only; final terms require sales confirmation.")}</p>
@@ -1677,7 +1808,11 @@ export default function HomePage() {
   const [locale, setLocale] = useState<ClientLocale>("zh");
   const [localeReady, setLocaleReady] = useState(false);
   const [view, setView] = useState<View>("home");
-  const [selected, setSelected] = useState(products.find((product) => product.id === "depth-48") ?? products[0]);
+  const [managedProducts, setManagedProducts] = useState<ManagedProduct[]>(createDefaultManagedProducts);
+  const storefrontProducts = useMemo(() => managedProducts
+    .filter((product) => product.publication.lifecycle !== "offline")
+    .map((product) => ({ ...product, image: withBasePath(product.image) })), [managedProducts]);
+  const [selected, setSelected] = useState(defaultProducts.find((product) => product.id === "depth-48") ?? defaultProducts[0]);
   const [brief, setBrief] = useState<DiscoveryBrief>({
     scene: "AMR / AGV",
     goal: "导航与避障",
@@ -1687,6 +1822,31 @@ export default function HomePage() {
   const [leadStoreReady, setLeadStoreReady] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
   const [assistantPrompt, setAssistantPrompt] = useState<AssistantPrompt | null>(null);
+  const [procurementItems, setProcurementItems] = useState<ProcurementItem[]>([]);
+  const [procurementOpen, setProcurementOpen] = useState(false);
+  const [configurationTarget, setConfigurationTarget] = useState<ConfigurationTarget>(null);
+
+  useEffect(() => {
+    const restoreProducts = () => {
+      const saved = parseManagedProducts(window.localStorage.getItem(PRODUCT_OPERATIONS_STORAGE_KEY));
+      if (saved) setManagedProducts(saved);
+    };
+    const restore = window.setTimeout(restoreProducts, 0);
+    const handleStorage = (event: StorageEvent) => {
+      if (event.key === PRODUCT_OPERATIONS_STORAGE_KEY) restoreProducts();
+    };
+    window.addEventListener("storage", handleStorage);
+    return () => {
+      window.clearTimeout(restore);
+      window.removeEventListener("storage", handleStorage);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!storefrontProducts.length || storefrontProducts.some((product) => product.id === selected.id)) return;
+    const sync = window.setTimeout(() => setSelected(storefrontProducts[0]), 0);
+    return () => window.clearTimeout(sync);
+  }, [selected.id, storefrontProducts]);
 
   useEffect(() => {
     const restore = window.setTimeout(() => {
@@ -1729,6 +1889,7 @@ export default function HomePage() {
   }, [leadStoreReady, leads]);
 
   const navigate = (next: View) => {
+    setConfigurationTarget(null);
     setView(next);
     if (window.location.hash) {
       window.history.replaceState(null, "", `${window.location.pathname}${window.location.search}`);
@@ -1763,18 +1924,45 @@ export default function HomePage() {
     navigate("standard");
   };
 
+  const addProductToProcurement = (product: Product) => {
+    setProcurementItems((current) => current.some((item) => item.productId === product.id)
+      ? current
+      : [...current, { productId: product.id, quantity: 1, configuration: {} }]);
+  };
+
+  const configureProcurementProduct = (product: Product) => {
+    setSelected(product);
+    setProcurementOpen(false);
+    setAssistantOpen(false);
+    navigate("standard");
+    setConfigurationTarget({ productId: product.id, requestId: Date.now() });
+  };
+
+  const removeProcurementProduct = (productId: string) => {
+    setProcurementItems((current) => current.filter((item) => item.productId !== productId));
+  };
+
   return (
     <LocaleContext.Provider value={{ locale, setLocale }}>
-      <div>
-        <MotionEffects />
-        <Header onNavigate={navigate} onNavigateSection={navigateToSection} onOpenAssistant={() => openAssistant()} />
-        {view === "home" && <Home onNavigate={navigate} onSelect={setSelected} brief={brief} onBriefChange={setBrief} onAskAi={openAssistant} />}
-        {view === "standard" && <StandardFlow selected={selected} onSelect={setSelected} onHome={() => navigate("home")} onCustom={() => navigate("custom")} onComplete={() => navigate("home")} onLeadCreated={addLead} brief={brief} onBriefChange={setBrief} onAskAi={openAssistant} />}
-        {view === "custom" && <CustomFlow onHome={() => navigate("home")} onComplete={() => navigate("home")} onLeadCreated={addLead} brief={brief} onAskAi={openAssistant} />}
-        {view === "home" && <Footer />}
-        {view === "home" && <FloatingOrderButton onClick={() => navigateToSection("standard-order")} />}
-        <AiAssistantDrawer open={assistantOpen} onClose={() => setAssistantOpen(false)} brief={brief} selected={selected} view={view} promptRequest={assistantPrompt} onSelectProduct={selectFromAssistant} />
-      </div>
+      <ProductCatalogContext.Provider value={storefrontProducts}>
+        <div>
+          <MotionEffects />
+          <Header
+            onNavigate={navigate}
+            onNavigateSection={navigateToSection}
+            onOpenAssistant={() => openAssistant()}
+            procurementCount={procurementItems.length}
+            onOpenProcurement={() => setProcurementOpen(true)}
+          />
+          {view === "home" && <Home onNavigate={navigate} onSelect={setSelected} brief={brief} onBriefChange={setBrief} onAskAi={openAssistant} />}
+          {view === "standard" && <StandardFlow key={configurationTarget?.requestId ?? "standard"} selected={selected} onSelect={setSelected} onHome={() => navigate("home")} onCustom={() => navigate("custom")} onComplete={() => navigate("home")} onLeadCreated={addLead} brief={brief} onBriefChange={setBrief} onAskAi={openAssistant} procurementItems={procurementItems} setProcurementItems={setProcurementItems} configurationTarget={configurationTarget} />}
+          {view === "custom" && <CustomFlow onHome={() => navigate("home")} onComplete={() => navigate("home")} onLeadCreated={addLead} brief={brief} onAskAi={openAssistant} />}
+          {view === "home" && <Footer />}
+          {view === "home" && <FloatingOrderButton onClick={() => navigateToSection("standard-order")} />}
+          <ProcurementDrawer open={procurementOpen} items={procurementItems} onClose={() => setProcurementOpen(false)} onConfigure={configureProcurementProduct} onRemove={removeProcurementProduct} />
+          <AiAssistantDrawer open={assistantOpen} onClose={() => setAssistantOpen(false)} brief={brief} selected={selected} view={view} promptRequest={assistantPrompt} onSelectProduct={selectFromAssistant} procurementItems={procurementItems} onAddProduct={addProductToProcurement} />
+        </div>
+      </ProductCatalogContext.Provider>
     </LocaleContext.Provider>
   );
 }

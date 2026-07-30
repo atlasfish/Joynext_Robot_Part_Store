@@ -2,9 +2,17 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import {
+  createDefaultManagedProducts,
+  formatPublicationState,
+  parseManagedProducts,
+  PRODUCT_OPERATIONS_STORAGE_KEY,
+  type ManagedProduct,
+  type ProductLifecycle,
+} from "@/lib/product-operations";
 import "./admin.css";
 
-type AdminTab = "overview" | "leads" | "customers" | "orders" | "tasks";
+type AdminTab = "overview" | "products" | "leads" | "customers" | "orders" | "tasks";
 type LeadStatus = "新线索" | "工程评审" | "销售跟进" | "培育中" | "已转机会" | "已关闭";
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const withBasePath = (path: string) => `${basePath}${path}`;
@@ -12,7 +20,7 @@ const withBasePath = (path: string) => `${basePath}${path}`;
 type Lead = {
   id: string;
   createdAt: string;
-  source: "标准订单" | "定制需求";
+  source: "标准订单" | "集采报单" | "定制需求";
   company: string;
   companyType: string;
   contact: string;
@@ -83,6 +91,7 @@ const demoLeads: Lead[] = [
 
 const tabMeta: Array<{ id: AdminTab; icon: string; label: string; note: string }> = [
   { id: "overview", icon: "⌂", label: "经营概览", note: "关键指标与转化" },
+  { id: "products", icon: "◇", label: "商品运营", note: "信息、上下线与预售" },
   { id: "leads", icon: "◎", label: "线索中心", note: "评分与业务路由" },
   { id: "customers", icon: "♙", label: "客户档案", note: "公司与历史记录" },
   { id: "orders", icon: "▣", label: "订单管理", note: "报价与履约状态" },
@@ -247,6 +256,153 @@ function CustomersModule({ leads, query }: { leads: Lead[]; query: string }) {
   );
 }
 
+function ProductsModule({
+  products,
+  query,
+  onUpdate,
+  onCreate,
+  onReset,
+}: {
+  products: ManagedProduct[];
+  query: string;
+  onUpdate: (id: string, changes: Partial<ManagedProduct>) => void;
+  onCreate: () => string;
+  onReset: () => void;
+}) {
+  const [filter, setFilter] = useState<ProductLifecycle | "all">("all");
+  const [selectedId, setSelectedId] = useState(products[0]?.id ?? "");
+  const [notice, setNotice] = useState("");
+  const filtered = products.filter((product) => {
+    const term = query.trim().toLowerCase();
+    return (filter === "all" || product.publication.lifecycle === filter)
+      && (!term || `${product.name}${product.model}${product.kind}${product.description}`.toLowerCase().includes(term));
+  });
+  const selected = products.find((product) => product.id === selectedId) ?? filtered[0] ?? products[0];
+  const counts = {
+    online: products.filter((product) => product.publication.lifecycle === "online").length,
+    presale: products.filter((product) => product.publication.lifecycle === "presale").length,
+    offline: products.filter((product) => product.publication.lifecycle === "offline").length,
+  };
+
+  const updateSelected = (changes: Partial<ManagedProduct>, message = "商品信息已自动保存") => {
+    if (!selected) return;
+    onUpdate(selected.id, changes);
+    setNotice(message);
+  };
+  const updatePublication = (changes: Partial<ManagedProduct["publication"]>, message?: string) => {
+    if (!selected) return;
+    updateSelected({ publication: { ...selected.publication, ...changes } }, message);
+  };
+  const setLifecycle = (lifecycle: ProductLifecycle) => {
+    const label = lifecycle === "online" ? "商品已上线" : lifecycle === "offline" ? "商品已临时下线" : "商品已设为预售";
+    updatePublication({
+      lifecycle,
+      offlineReason: lifecycle === "offline" ? selected?.publication.offlineReason || "运营临时下线" : "",
+    }, label);
+  };
+
+  return (
+    <div className="product-ops-module">
+      <section className="product-ops-summary">
+        <article><span>商品总数</span><strong>{products.length}</strong><small>本地演示商品库</small></article>
+        <article><span>销售中</span><strong>{counts.online}</strong><small>客户端可直接询价</small></article>
+        <article><span>预售计划</span><strong>{counts.presale}</strong><small>支持定时开启</small></article>
+        <article><span>临时下线</span><strong>{counts.offline}</strong><small>客户端立即隐藏</small></article>
+      </section>
+
+      <section className="product-ops-toolbar">
+        <div className="filter-pills">
+          {([
+            ["all", "全部"],
+            ["online", "销售中"],
+            ["presale", "预售"],
+            ["offline", "已下线"],
+          ] as const).map(([value, label]) => (
+            <button className={filter === value ? "active" : ""} onClick={() => setFilter(value)} key={value}>
+              {label}<span>{value === "all" ? products.length : counts[value]}</span>
+            </button>
+          ))}
+        </div>
+        <div>
+          <button className="product-reset-button" onClick={() => { onReset(); setNotice("已恢复初始演示商品"); }}>恢复演示数据</button>
+          <button className="product-create-button" onClick={() => { const id = onCreate(); setSelectedId(id); setFilter("all"); setNotice("已创建待配置商品"); }}>＋ 新增商品</button>
+        </div>
+      </section>
+
+      <div className="product-ops-layout">
+        <section className="admin-card product-ops-list">
+          <div className="product-list-head"><span>商品</span><span>销售状态</span><span>库存 / 计划</span><span>最近更新</span></div>
+          {filtered.map((product) => {
+            const publication = formatPublicationState(product);
+            return (
+              <button className={selected?.id === product.id ? "product-list-row selected" : "product-list-row"} onClick={() => { setSelectedId(product.id); setNotice(""); }} key={product.id}>
+                <span className="product-list-main"><img src={withBasePath(product.image)} alt="" /><span><b>{product.name}</b><small>{product.model} · {product.kind}</small></span></span>
+                <span><em className={`publication-pill ${publication.state}`}>{publication.label}</em><small>{product.publication.storefrontBadge || "无前台标签"}</small></span>
+                <span><b>{publication.detail}</b><small>{product.publication.expectedDelivery || product.lead}</small></span>
+                <span><b>{product.publication.updatedAt}</b><small>运营管理员</small></span>
+              </button>
+            );
+          })}
+          {!filtered.length && <div className="product-list-empty">当前筛选下没有商品。</div>}
+        </section>
+
+        {selected && (
+          <aside className="admin-card product-editor">
+            <div className="product-editor-heading">
+              <div><span>PRODUCT EDITOR</span><h2>商品信息与销售设置</h2><p>演示修改自动保存，客户端刷新后生效。</p></div>
+              <a href={basePath || "/"} target="_blank" rel="noreferrer">预览前台 ↗</a>
+            </div>
+            {notice && <div className="product-save-notice"><i />{notice}<button onClick={() => setNotice("")}>×</button></div>}
+            <div className="product-editor-preview">
+              <img src={withBasePath(selected.image)} alt="" />
+              <div><small>{selected.kind}</small><strong>{selected.name}</strong><span>{selected.model}</span></div>
+              <em className={`publication-pill ${formatPublicationState(selected).state}`}>{formatPublicationState(selected).label}</em>
+            </div>
+
+            <section className="editor-section">
+              <div className="editor-section-title"><span>01</span><div><h3>基础商品信息</h3><p>用于客户端产品卡片、搜索和询价摘要。</p></div></div>
+              <div className="editor-form-grid">
+                <label><span>商品名称</span><input value={selected.name} onChange={(event) => updateSelected({ name: event.target.value })} /></label>
+                <label><span>产品型号</span><input value={selected.model} onChange={(event) => updateSelected({ model: event.target.value })} /></label>
+                <label><span>商品分类</span><select value={selected.kind} onChange={(event) => updateSelected({ kind: event.target.value })}><option>计算与控制</option><option>3D 感知</option><option>环境感知</option><option>运动感知</option></select></label>
+                <label><span>价格展示</span><input value={selected.price} onChange={(event) => updateSelected({ price: event.target.value })} placeholder="如 ¥3,500–¥5,800 / 件" /></label>
+                <label className="wide"><span>产品简介</span><textarea value={selected.description} onChange={(event) => updateSelected({ description: event.target.value })} /></label>
+                <label className="wide"><span>关键参数（每行一项）</span><textarea value={selected.verified.join("\n")} onChange={(event) => updateSelected({ verified: event.target.value.split("\n").map((item) => item.trim()).filter(Boolean) })} /></label>
+              </div>
+            </section>
+
+            <section className="editor-section">
+              <div className="editor-section-title"><span>02</span><div><h3>销售状态</h3><p>控制客户端是否可见以及当前购买方式。</p></div></div>
+              <div className="lifecycle-actions">
+                <button className={selected.publication.lifecycle === "online" ? "active online" : ""} onClick={() => setLifecycle("online")}><i>●</i><span><b>立即上线</b><small>前台展示并接受询价</small></span></button>
+                <button className={selected.publication.lifecycle === "presale" ? "active presale" : ""} onClick={() => setLifecycle("presale")}><i>◷</i><span><b>定时预售</b><small>展示预售日期与交付计划</small></span></button>
+                <button className={selected.publication.lifecycle === "offline" ? "active offline" : ""} onClick={() => setLifecycle("offline")}><i>—</i><span><b>临时下线</b><small>前台立即隐藏，数据保留</small></span></button>
+              </div>
+              <div className="editor-form-grid publication-fields">
+                <label><span>前台运营标签</span><input value={selected.publication.storefrontBadge} onChange={(event) => updatePublication({ storefrontBadge: event.target.value })} placeholder="重点推荐 / 新品预售" /></label>
+                <label><span>库存与供货提示</span><input value={selected.publication.stockStatus} onChange={(event) => updatePublication({ stockStatus: event.target.value })} /></label>
+                {selected.publication.lifecycle === "presale" && <>
+                  <label><span>预售开启时间</span><input type="datetime-local" value={selected.publication.presaleStartAt} onChange={(event) => updatePublication({ presaleStartAt: event.target.value })} /></label>
+                  <label><span>预计交付</span><input value={selected.publication.expectedDelivery} onChange={(event) => updatePublication({ expectedDelivery: event.target.value })} placeholder="预计 9 月起分批交付" /></label>
+                </>}
+                {selected.publication.lifecycle === "offline" && <label className="wide"><span>下线原因（仅管理端）</span><input value={selected.publication.offlineReason} onChange={(event) => updatePublication({ offlineReason: event.target.value })} /></label>}
+              </div>
+            </section>
+
+            <div className="editor-result">
+              <span>当前前台效果</span>
+              <b>{formatPublicationState(selected).label} · {selected.publication.storefrontBadge || "常规商品"}</b>
+              <p>{selected.publication.lifecycle === "offline"
+                ? "该商品不会出现在客户端目录、选型推荐和采购配置中。"
+                : `${formatPublicationState(selected).detail}。${selected.publication.expectedDelivery || "最终库存、价格与交期由销售确认。"}`}</p>
+            </div>
+          </aside>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function OrdersModule({ leads, query, onUpdate }: { leads: Lead[]; query: string; onUpdate: (id: string, changes: Partial<Lead>) => void }) {
   const orders = leads.filter((lead) => lead.source === "标准订单" && (!query || `${lead.company}${lead.product}${lead.id}`.toLowerCase().includes(query.toLowerCase())));
   return (
@@ -295,7 +451,17 @@ export default function AdminPage() {
   const [tab, setTab] = useState<AdminTab>("overview");
   const [query, setQuery] = useState("");
   const [leads, setLeads] = useState<Lead[]>(demoLeads);
+  const [managedProducts, setManagedProducts] = useState<ManagedProduct[]>(createDefaultManagedProducts);
   const [ready, setReady] = useState(false);
+  const [productsReady, setProductsReady] = useState(false);
+
+  useEffect(() => {
+    const restoreTab = window.setTimeout(() => {
+      const requested = window.location.hash.replace("#", "") as AdminTab;
+      if (tabMeta.some((item) => item.id === requested)) setTab(requested);
+    }, 0);
+    return () => window.clearTimeout(restoreTab);
+  }, []);
 
   useEffect(() => {
     const restore = window.setTimeout(() => {
@@ -318,9 +484,58 @@ export default function AdminPage() {
     if (ready) window.localStorage.setItem("joynext-demo-leads", JSON.stringify(leads));
   }, [leads, ready]);
 
+  useEffect(() => {
+    const restore = window.setTimeout(() => {
+      const saved = parseManagedProducts(window.localStorage.getItem(PRODUCT_OPERATIONS_STORAGE_KEY));
+      if (saved) setManagedProducts(saved);
+      setProductsReady(true);
+    }, 0);
+    return () => window.clearTimeout(restore);
+  }, []);
+
+  useEffect(() => {
+    if (productsReady) window.localStorage.setItem(PRODUCT_OPERATIONS_STORAGE_KEY, JSON.stringify(managedProducts));
+  }, [managedProducts, productsReady]);
+
   const updateLead = (id: string, changes: Partial<Lead>) => {
     setLeads((current) => current.map((lead) => lead.id === id ? { ...lead, ...changes } : lead));
   };
+  const updateProduct = (id: string, changes: Partial<ManagedProduct>) => {
+    setManagedProducts((current) => current.map((product) => product.id === id ? {
+      ...product,
+      ...changes,
+      publication: {
+        ...product.publication,
+        ...(changes.publication ?? {}),
+        updatedAt: "刚刚",
+      },
+    } : product));
+  };
+  const createProduct = () => {
+    const template = createDefaultManagedProducts()[0];
+    const id = `demo-product-${managedProducts.length + 1}`;
+    const product: ManagedProduct = {
+      ...template,
+      id,
+      name: "待配置机器人元器件",
+      model: "NEW-MODEL",
+      price: "价格待确认",
+      description: "请补充产品用途、核心能力和适用客户场景。",
+      verified: ["待补充关键参数"],
+      sourceSlide: 0,
+      publication: {
+        ...template.publication,
+        lifecycle: "offline",
+        storefrontBadge: "新品",
+        stockStatus: "待配置",
+        offlineReason: "商品资料尚未配置完成",
+        updatedAt: "刚刚",
+      },
+    };
+    setManagedProducts((current) => [...current, product]);
+    return id;
+  };
+  const resetProducts = () => setManagedProducts(createDefaultManagedProducts());
   const current = tabMeta.find((item) => item.id === tab) ?? tabMeta[0];
 
   return (
@@ -329,13 +544,14 @@ export default function AdminPage() {
         <Link className="admin-brand" href="/"><img src={withBasePath("/assets/brand/joynext-logo-light.png")} alt="JOYNEXT 均联智行" /></Link>
         <div className="admin-portal-label"><span>ADMIN PORTAL</span><small>数字化销售运营中心</small></div>
         <nav>
-          {tabMeta.map((item) => <button className={tab === item.id ? "active" : ""} onClick={() => { setTab(item.id); setQuery(""); }} key={item.id}><i>{item.icon}</i><span><b>{item.label}</b><small>{item.note}</small></span>{item.id === "leads" && <em>{leads.filter((lead) => lead.status === "新线索").length}</em>}</button>)}
+          {tabMeta.map((item) => <button className={tab === item.id ? "active" : ""} onClick={() => { setTab(item.id); setQuery(""); window.history.replaceState(null, "", `#${item.id}`); }} key={item.id}><i>{item.icon}</i><span><b>{item.label}</b><small>{item.note}</small></span>{item.id === "leads" && <em>{leads.filter((lead) => lead.status === "新线索").length}</em>}</button>)}
         </nav>
         <div className="admin-side-bottom"><Link href="/">← 返回客户端网站</Link><p><span className="live-dot" />系统运行正常<small>演示数据本地持久化</small></p></div>
       </aside>
       <div className="admin-content">
         <AdminHeader title={current.label} description={current.note} query={query} onQuery={setQuery} />
         {tab === "overview" && <Overview leads={leads} onOpenLead={() => setTab("leads")} />}
+        {tab === "products" && <ProductsModule products={managedProducts} query={query} onUpdate={updateProduct} onCreate={createProduct} onReset={resetProducts} />}
         {tab === "leads" && <LeadsModule leads={leads} query={query} onUpdate={updateLead} />}
         {tab === "customers" && <CustomersModule leads={leads} query={query} />}
         {tab === "orders" && <OrdersModule leads={leads} query={query} onUpdate={updateLead} />}
