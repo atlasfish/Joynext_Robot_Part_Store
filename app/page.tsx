@@ -612,7 +612,6 @@ function AiDiscoveryWorkspace({
             <select value={brief.stage} onChange={(event) => onBriefChange({ ...brief, stage: event.target.value as DiscoveryBrief["stage"] })}>
               {(["概念设计", "Demo / 样机", "样机验证", "小批量验证"] as DiscoveryBrief["stage"][]).map((stage) => <option value={stage} key={stage}>{v(stage)}</option>)}
             </select>
-            <small>{c("项目阶段有助于我们判断样品、工程评审和交付安排。", "The project stage helps us assess samples, engineering review and delivery planning.")}</small>
           </label>
         </div>
         <div className="ai-recommendation-result" aria-live="polite">
@@ -624,11 +623,11 @@ function AiDiscoveryWorkspace({
           <div className="ai-reasoning">
             <span>{c("建议依据", "Why it fits")}</span>
             <p>{locale === "zh"
-              ? `您计划用于“${brief.goal}”，当前处于${brief.stage}阶段。建议综合考虑工作范围、接口、安装条件和供货状态。`
-              : `Your application is “${v(brief.goal)}” at the ${v(brief.stage)} stage. The shortlist considers working range, interfaces, installation constraints and availability.`}</p>
+              ? `${brief.goal} · ${brief.stage}，综合匹配范围、接口与供货状态。`
+              : `${v(brief.goal)} · ${v(brief.stage)}, matched by range, interface and availability.`}</p>
           </div>
           <div className="recommendation-actions">
-            <button className="primary-button" onClick={() => startConfiguration(primary.product)}>{c("查看配置并提交采购意向", "Configure and request a quote")} →</button>
+            <button className="primary-button" onClick={() => startConfiguration(primary.product)}>{c("查看配置", "Configure")} →</button>
             <button className="outline-button" onClick={() => onAskAi(locale === "zh"
               ? `请结合我的${brief.scene}场景、${brief.goal}目标和${brief.stage}阶段，解释为什么推荐 ${primary.product.model}，并给出候选组合方案和需要确认的问题。`
               : `For my ${v(brief.scene)} application, ${v(brief.goal)} goal and ${v(brief.stage)} stage, explain why ${primary.product.model} is recommended, suggest alternatives and list what still needs confirmation.`)}>{c("询问选型助理", "Ask the product advisor")}</button>
@@ -707,8 +706,8 @@ function Home({
             <div className="eyebrow"><span /> ROBOTICS COMPONENTS</div>
             <h1>{c("从需求出发，", "Find the right component,")}<br /><em>{c("找到合适的产品。", "starting with your application.")}</em></h1>
             <p>{c(
-              "输入工作距离、接口、使用环境和预计数量，快速筛选候选产品。确定配置后可直接提交采购意向，复杂需求由销售与工程师继续协助。",
-              "Enter your working range, interface, environment and expected quantity to shortlist products. Submit a purchase request when ready, or involve sales and engineering for complex requirements.",
+              "按用途、距离和接口快速选型；复杂需求可转销售与工程师。",
+              "Shortlist by task, range and interface. Specialists support complex needs.",
             )}</p>
             <form className="search-box" onSubmit={startSearch}>
               <label>
@@ -786,7 +785,7 @@ function Home({
 
         <section className="products-section" id="products">
           <div className="section-heading split" data-reveal>
-            <div><span>PRODUCT CATALOG</span><h2>{c("找到符合采购条件的候选产品。", "Find products that fit your requirements.")}</h2><p>{c("关键参数均来自产品资料；价格、库存、交期和需要工程确认的项目会明确标注。", "Key specifications come from product documentation. Price, availability, lead time and engineering-review items are clearly marked.")}</p></div>
+            <div><span>PRODUCT CATALOG</span><h2>{c("候选产品", "Product shortlist")}</h2><p>{c("参数可追溯，待确认项明确标注。", "Traceable data with clear review flags.")}</p></div>
             <button className="text-arrow-button" onClick={() => onNavigate("standard")}>{c("比较并配置产品", "Compare and configure")} <span>↗</span></button>
           </div>
           <div className="catalog-toolbar" data-reveal>
@@ -833,26 +832,26 @@ function Home({
           <div className="section-heading center" data-reveal>
             <span>TWO WAYS TO REQUEST</span>
             <h2>{c("根据需求清晰度，选择提交方式。", "Choose the right request path.")}</h2>
-            <p>{c("型号和接口明确时直接提交采购意向；需要适配开发或技术确认时，提交项目需求获得联合评估。", "Submit a purchase request when the model and interface are clear, or request a joint review when adaptation or technical confirmation is needed.")}</p>
+            <p>{c("标准件直接询价，复杂项目联合评估。", "Request standard products or review complex projects.")}</p>
           </div>
           <div className="path-grid">
             <article className="path-card standard" id="standard-order" data-reveal>
               <div className="path-topline"><span>01</span><b>STANDARD</b></div>
               <div className="path-icon">↗</div>
-              <div><h3>{c("我已大致确定产品", "I have a product in mind")}</h3><p>{c("核对参数、选择配置与数量，并提交采购意向。", "Review specifications, select configuration and quantity, then submit a purchase request.")}</p><ul><li>{c("按产品选择接口和使用条件", "Select interfaces and operating conditions")}</li><li>{c("填写公司与收货信息", "Provide company and delivery details")}</li><li>{c("销售确认价格、库存与交期", "Sales confirms price, stock and lead time")}</li></ul></div>
+              <div><h3>{c("标准件采购", "Standard products")}</h3><p>{c("选配置与数量，加入采购栏统一提交。", "Configure, add to the list and submit together.")}</p></div>
               <button className="primary-button" onClick={() => onNavigate("standard")}>{c("选择并配置产品", "Select and configure")} <span>→</span></button>
             </article>
             <article className="path-card custom" data-reveal style={{ "--reveal-delay": "100ms" } as React.CSSProperties}>
               <div className="path-topline"><span>02</span><b>ENGINEERING</b></div>
               <div className="path-icon">＋</div>
-              <div><h3>{c("我需要方案或适配支持", "I need a solution or adaptation")}</h3><p>{c("描述项目目标和技术条件，由销售与工程师共同评估。", "Describe the project goal and technical constraints for a joint sales and engineering review.")}</p><ul><li>{c("补充接口、环境和安装边界", "Capture interface, environment and installation constraints")}</li><li>{c("查看初步参考估价区间", "View a preliminary price range")}</li><li>{c("获得候选产品和后续确认清单", "Receive candidates and a confirmation checklist")}</li></ul></div>
+              <div><h3>{c("方案与适配", "Solutions & adaptation")}</h3><p>{c("提交关键条件，由销售与工程师联合评估。", "Share key constraints for joint review.")}</p></div>
               <button className="dark-button" onClick={() => onNavigate("custom")}>{c("提交项目需求", "Submit project requirements")} <span>→</span></button>
             </article>
           </div>
         </section>
 
         <section className="trust-boundary-section" id="support" data-reveal>
-          <div className="trust-boundary-copy"><span>RELIABLE SELECTION SUPPORT</span><h2>{c("先获得清晰建议，", "Get a clear starting point,")}<br />{c("再由专业人员确认。", "then confirm with a specialist.")}</h2><p>{c("选型建议依据已确认产品资料。兼容性、最终设计、正式价格、库存、交期和履约承诺由销售或工程师确认。", "Selection guidance uses verified product data. Compatibility, final design, formal pricing, stock, lead time and delivery commitments are confirmed by sales or engineering.")}</p><button onClick={() => onAskAi(c("请帮我梳理采购条件，并说明哪些信息可以直接确认、哪些需要销售或工程师确认。", "Help me structure my purchasing requirements and explain what is confirmed versus what needs sales or engineering review."))}>{c("咨询选型问题", "Ask a selection question")} <b>↗</b></button></div>
+          <div className="trust-boundary-copy"><span>RELIABLE SELECTION SUPPORT</span><h2>{c("资料辅助选型，", "Data-guided selection,")}<br />{c("专业人员确认。", "specialist confirmed.")}</h2><p>{c("兼容性、价格与交付由销售或工程师确认。", "Compatibility, pricing and delivery require specialist confirmation.")}</p><button onClick={() => onAskAi(c("请帮我梳理采购条件和待确认项。", "Help structure my requirements and open questions."))}>{c("咨询选型", "Ask advisor")} <b>↗</b></button></div>
           <div className="trust-principles">
             {[
               ["01", c("参数来源清楚", "Traceable specifications"), c("关键产品信息标注资料页码", "Key product information includes source pages")],
@@ -1077,8 +1076,8 @@ function StandardFlow({
         <section className="flow-content">
           <div className="flow-title">
             <span>SELECT A PRODUCT</span>
-            <h1>{c("选择产品，准备采购意向", "Choose a product for your request")}</h1>
-            <p>{c("比较已确认参数、适用场景和供货状态。需要工程评审的产品会明确提示。", "Compare verified specifications, applications and availability. Products requiring engineering review are clearly marked.")}</p>
+            <h1>{c("选择产品", "Choose products")}</h1>
+            <p>{c("比较参数与供货状态，选择后配置。", "Compare specifications and availability, then configure.")}</p>
           </div>
           <div className="ai-selection-guide">
             <div className="ai-guide-copy"><span>AI</span><p><small>{c("当前采购条件", "Current requirements")}</small><b>{v(brief.scene)} · {v(brief.goal)}</b><em>{v(brief.stage)}</em></p></div>
@@ -1106,7 +1105,7 @@ function StandardFlow({
               <div><span className="verified-pill">✓ {c("资料已核对", "Data verified")}</span><small>{selected.model}</small><h1>{v(selected.name)}</h1><p>{v(selected.description)}</p></div>
             </div>
             <div className="panel">
-              <div className="panel-heading"><h2>{c("已确认参数", "Verified specifications")}</h2><span>{c("来源：产品资料", "Source: product presentation")} · P.{selected.sourceSlide}</span></div>
+              <div className="panel-heading"><h2>{c("关键参数", "Key specifications")}</h2><span>P.{selected.sourceSlide}</span></div>
               <div className="verified-table">
                 {selected.verified.map((item, index) => <div key={item}><span>{[
                   c("性能 / 规格", "Performance / spec"),
@@ -1117,7 +1116,7 @@ function StandardFlow({
               </div>
             </div>
             <div className="panel">
-              <div className="panel-heading"><h2>{c("选择采购配置", "Select configuration")}</h2><span>{c("带 * 为必选", "* Required")}</span></div>
+              <div className="panel-heading"><h2>{c("采购配置", "Configuration")}</h2><span>* {c("必选", "Required")}</span></div>
               <div className="config-fields">
                 {selected.configuration.map((item) => (
                   <label key={item.key}>
@@ -1132,7 +1131,7 @@ function StandardFlow({
               </div>
             </div>
             <div className="ai-configuration-companion" aria-live="polite">
-              <div className="ai-companion-heading"><span>AI</span><p><small>CONFIGURATION CHECK</small><b>{c("核对当前配置是否符合采购用途", "Check this configuration against your application")}</b></p><button type="button" onClick={() => onAskAi(locale === "zh"
+              <div className="ai-companion-heading"><span>AI</span><p><small>CONFIGURATION CHECK</small><b>{c("配置检查", "Configuration check")}</b></p><button type="button" onClick={() => onAskAi(locale === "zh"
                 ? `请评估我为${brief.scene}选择的 ${selected.model} 配置：${Object.entries(configuration).map(([key, value]) => `${key}=${value}`).join("；")}。说明匹配点、风险和仍需确认的参数。`
                 : `Review my ${selected.model} configuration for a ${v(brief.scene)} application: ${Object.entries(configuration).map(([key, value]) => `${key}=${v(value)}`).join("; ")}. Explain the fit, risks and parameters still requiring confirmation.`)}>{c("咨询当前配置", "Review configuration")} →</button></div>
               <div className="ai-signal-grid">
@@ -1143,12 +1142,12 @@ function StandardFlow({
               <p className="ai-handoff-note"><b>{c("下一步：", "Next step: ")}</b>{engineering
                 ? c("该产品需要工程评审。请转入项目需求，当前产品与配置会一并提交。", "This product requires engineering review. Continue with a project request; the selected product and configuration will be included.")
                 : customerComplete
-                  ? c("信息已完整，可以提交采购意向，销售将确认价格、库存和交期。", "Your details are complete. Submit the purchase request and sales will confirm price, stock and lead time.")
-                  : c("请继续补全公司、联系人和收货信息。", "Complete the company, contact and delivery details.")}</p>
+                  ? c("信息完整，可提交采购栏。", "Ready to submit.")
+                  : c("请补全联系与收货信息。", "Complete contact and delivery details.")}</p>
             </div>
             <div className="panel customer-panel">
               <div className="panel-heading">
-                <div><h2>{c("公司与收货信息", "Company and delivery details")}</h2><p>{c("用于联系确认采购需求、准备报价并评估发货安排。", "Used to confirm your request, prepare a quotation and assess delivery.")}</p></div>
+                <div><h2>{c("联系与收货", "Contact & delivery")}</h2></div>
                 <span>{c("带 * 为必填", "* Required")}</span>
               </div>
               <div className="config-fields">
@@ -1187,7 +1186,7 @@ function StandardFlow({
                   <input autoComplete="postal-code" value={customer.postalCode} onChange={(e) => updateCustomer("postalCode", e.target.value)} placeholder={c("选填", "Optional")} />
                 </label>
               </div>
-              <div className="tracking-note"><span>✓</span><p><b>{c("信息用途说明", "How your details are used")}</b>：{c("我们会将本次采购意向与贵公司的历史咨询关联，避免重复沟通，并用于后续报价与服务。", "We link this request with your company’s previous enquiries to avoid repeated questions and support quotation and follow-up service.")}</p></div>
+              <div className="tracking-note"><span>✓</span><p>{c("信息仅用于报价、交付和后续服务。", "Used only for quotation, delivery and follow-up.")}</p></div>
             </div>
             <div className={engineering ? "engineer-warning" : "ai-explanation"}>
               <span>{engineering ? "!" : "AI"}</span>
@@ -1248,7 +1247,7 @@ function StandardFlow({
           <div className="success-mark">✓</div>
           <span>CONSOLIDATED REQUEST CREATED</span>
           <h1>{c("集采报单已生成", "Procurement request created")}</h1>
-          <p>{c("报单编号", "Request number")} <b>{orderId}</b>。{c("所有产品已一次提交，销售将统一确认正式价格、库存、交期和订单信息。", "All products were submitted together. Sales will confirm pricing, stock, lead time and order details in one follow-up.")}</p>
+          <p>{c("报单编号", "Request number")} <b>{orderId}</b>。{c("销售将统一确认价格、库存与交期。", "Sales will confirm pricing, stock and lead time.")}</p>
           <div className="confirmation-card">
             <div><small>{c("产品项", "Line items")}</small><strong>{procurementItems.length} {c("项", "items")}</strong></div>
             <div><small>{c("总数量", "Total quantity")}</small><strong>{totalProcurementQuantity} {c("件", "pcs")}</strong></div>
@@ -1266,7 +1265,7 @@ function StandardFlow({
                 <em>{standardPriceLabel(product.id, locale, quantity)}</em>
               </article>
             ))}
-            <p>{c("仅供采购沟通与内部跟进，不构成正式报价。具体价格、库存、交期及履约条件以销售确认后的正式文件为准。", "For purchasing communication and internal follow-up only; this is not a formal quotation. Final pricing, stock, lead time and delivery terms require sales confirmation.")}</p>
+            <p>{c("仅供参考，正式价格与交付以销售确认为准。", "For reference only; final terms require sales confirmation.")}</p>
           </div>
           <div className="customer-profile-card">
             <div className="customer-profile-heading"><span>{c("联系与收货信息", "Contact and delivery details")}</span><b>{c("已随采购意向提交", "Submitted with your request")}</b></div>
@@ -1276,7 +1275,6 @@ function StandardFlow({
               <div><small>{c("国家 / 城市", "Country / city")}</small><strong>{customerLocation}</strong><span>{customer.postalCode ? `${c("邮编", "Postal code")} ${customer.postalCode}` : c("未填写邮编", "No postal code")}</span></div>
               <div><small>{c("收货地址", "Delivery address")}</small><strong>{customer.address}</strong><span>{c("用于评估发货与区域服务安排", "Used to assess shipping and regional service")}</span></div>
             </div>
-            <p>{c("后续咨询将与贵公司的本次记录关联，避免重复提供相同信息。", "Future enquiries will be linked to this company record so you do not need to provide the same information again.")}</p>
           </div>
           <div className="sales-timeline"><div className="done"><span>✓</span><b>{c("意向提交", "Request sent")}</b></div><i /><div className="active"><span>2</span><b>{c("销售确认", "Sales review")}</b></div><i /><div><span>3</span><b>{c("报价与订单", "Quote & order")}</b></div></div>
           <div className="confirmation-actions">
@@ -1425,16 +1423,16 @@ function CustomFlow({
       <div className="flow-bar"><button className="back-button" onClick={onHome}>← {c("返回产品中心", "Back to products")}</button><Progress step={2} custom /><span className="service-badge"><i /> {c("可咨询销售", "Sales support")}</span></div>
       <section className="custom-layout">
         <div className="custom-main">
-          <div className="flow-title"><span>PROJECT REQUIREMENTS</span><h1>{c("描述项目，申请方案评估", "Describe your project for solution review")}</h1><p>{locale === "zh"
-            ? `当前选择：${brief.scene} · ${brief.goal}。请提供用途、接口、环境、安装条件、数量与目标时间，便于销售和工程师判断候选产品与工作范围。`
-            : `Current selection: ${v(brief.scene)} · ${v(brief.goal)}. Add the application, interfaces, environment, installation constraints, quantity and timing so sales and engineering can assess suitable products and scope.`}</p></div>
+          <div className="flow-title"><span>PROJECT REQUIREMENTS</span><h1>{c("项目需求评估", "Project review")}</h1><p>{locale === "zh"
+            ? `${brief.scene} · ${brief.goal}。补充关键条件即可获得联合评估。`
+            : `${v(brief.scene)} · ${v(brief.goal)}. Add key constraints for joint review.`}</p></div>
           <form className="custom-form" onSubmit={submit}>
             <div className="form-section">
-              <div className="form-section-title"><span>01</span><div><h2>{c("项目与应用条件", "Project and application")}</h2><p>{c("用于初步判断产品方向和需要参与的专业人员。", "Used to identify product directions and the specialists needed for review.")}</p></div></div>
+              <div className="form-section-title"><span>01</span><div><h2>{c("项目与应用", "Project")}</h2></div></div>
               <div className="form-grid">
                 <label><span>{c("项目名称 *", "Project name *")}</span><input required value={form.project} onChange={(e) => update("project", e.target.value)} placeholder={c("例如：仓储 AMR 视觉升级", "e.g. Warehouse AMR vision upgrade")} /></label>
                 <label><span>{c("机器人类型 *", "Robot type *")}</span><select value={form.scene} onChange={(e) => update("scene", e.target.value)}>{["人形机器人", "AMR / AGV", "协作机械臂", "服务机器人", "其他"].map((scene) => <option value={scene} key={scene}>{v(scene)}</option>)}</select></label>
-                <label className="full-field"><span>{c("需求描述 *", "Requirement description *")}</span><textarea required value={form.need} onChange={(e) => update("need", e.target.value)} placeholder={c("请描述任务目标、已有平台、关键指标、接口、安装空间、环境约束和期望交付时间…", "Describe the task, existing platform, key targets, interfaces, installation space, environment and desired timing…")} /></label>
+                <label className="full-field"><span>{c("需求描述 *", "Requirements *")}</span><textarea required value={form.need} onChange={(e) => update("need", e.target.value)} placeholder={c("用途、接口、环境、安装、数量和时间…", "Task, interface, environment, installation, volume and timing…")} /></label>
               </div>
               <div className="ai-requirement-coach" aria-live="polite">
                 <div className="requirement-score"><span>AI</span><p><small>{c("信息完整度", "Information completeness")}</small><strong>{requirementCompleteness}%</strong></p><i><b style={{ width: `${requirementCompleteness}%` }} /></i></div>
@@ -1442,18 +1440,18 @@ function CustomFlow({
                   {requirementChecks.map((item) => <span className={item.done ? "done" : ""} key={item.label}>{item.done ? "✓" : "+"} {item.label}</span>)}
                 </div>
                 <div className="requirement-prompts">
-                  <small>{c("点击提示，将待补充内容加入需求描述", "Click a prompt to add the missing topic to your description")}</small>
+                  <small>{c("点击补充缺失项", "Add missing details")}</small>
                   <div>{requirementFragments.map((fragment) => <button type="button" key={fragment} onClick={() => addRequirementFragment(fragment)}>{fragment}</button>)}</div>
                 </div>
                 <p><b>{c("当前信息检查：", "Current information check: ")}</b>{form.need.trim()
                   ? locale === "zh"
                     ? `${form.scene}项目，主要用于${brief.goal}；已包含 ${requirementChecks.filter((item) => item.done).map((item) => item.label).join("、") || "基础场景"}，其余内容需要后续确认。`
                     : `${v(form.scene)} project for ${v(brief.goal)}; captured: ${requirementChecks.filter((item) => item.done).map((item) => item.label).join(", ") || "basic application"}. Remaining items still need confirmation.`
-                  : c("请先描述任务目标。填写过程中会提示工程评估仍缺少的信息，不会自动猜测关键参数。", "Start with the task. Missing information for engineering review will be highlighted without guessing key parameters.")}</p>
+                  : c("请先描述任务目标。", "Start with the task.")}</p>
               </div>
             </div>
             <div className="form-section">
-              <div className="form-section-title"><span>02</span><div><h2>{c("采购与联系信息", "Purchasing and contact details")}</h2><p>{c("用于准备报价、评估数量与交付时间，并安排后续沟通。", "Used to prepare a quote, assess volume and timing, and arrange follow-up.")}</p></div></div>
+              <div className="form-section-title"><span>02</span><div><h2>{c("采购与联系", "Purchasing & contact")}</h2></div></div>
               <div className="form-grid">
                 <label><span>{c("公司名称 *", "Company name *")}</span><input required value={form.company} onChange={(e) => update("company", e.target.value)} placeholder={c("公司全称", "Legal company name")} /></label>
                 <label><span>{c("预计用量", "Expected volume")}</span><input value={form.volume} onChange={(e) => update("volume", e.target.value)} placeholder={c("例如：100–500 套 / 年", "e.g. 100–500 units / year")} /></label>
@@ -1465,7 +1463,7 @@ function CustomFlow({
               </div>
             </div>
             <div className="form-section">
-              <div className="form-section-title"><span>03</span><div><h2>{c("项目节奏与参考资料", "Project timing and reference files")}</h2><p>{c("选择项目节奏；如有规格书、图纸或 BOM，可一并附上文件名供后续沟通。", "Select the project timing and add specifications, drawings or a BOM to support follow-up.")}</p></div></div>
+              <div className="form-section-title"><span>03</span><div><h2>{c("节奏与附件", "Timing & files")}</h2></div></div>
               <div className="priority-row">
                 {["常规", "紧急样机", "量产项目"].map((item) => <button type="button" className={priority === item ? "priority active" : "priority"} key={item} onClick={() => setPriority(item)}><span>{item === "常规" ? "○" : item === "紧急样机" ? "⚡" : "▦"}</span><b>{v(item)}</b><small>{item === "常规"
                   ? c("常规评估与联系节奏", "Standard review and response")
@@ -1473,7 +1471,7 @@ function CustomFlow({
                     ? c("优先确认样机资源与时间", "Priority check of prototype resources and timing")
                     : c("评估量产导入、验证与供货计划", "Review production launch, validation and supply planning")}</small></button>)}
               </div>
-              <div className="upload-box"><span>⇧</span><div><b>{attachments.length ? attachments.join(" · ") : c("添加需求文档、图纸或 BOM", "Add specifications, drawings or a BOM")}</b><small>{c("支持 PDF、PPT、STEP、Excel；文件将在销售联系时进一步确认", "PDF, PPT, STEP and Excel; files will be confirmed during sales follow-up")}</small></div><label className="upload-trigger">{c("选择文件", "Choose files")}<input type="file" multiple accept=".pdf,.ppt,.pptx,.step,.stp,.xls,.xlsx" onChange={(event) => setAttachments(Array.from(event.target.files ?? []).map((file) => file.name))} /></label></div>
+              <div className="upload-box"><span>⇧</span><div><b>{attachments.length ? attachments.join(" · ") : c("添加文档、图纸或 BOM", "Add documents, drawings or BOM")}</b><small>PDF · PPT · STEP · Excel</small></div><label className="upload-trigger">{c("选择文件", "Choose files")}<input type="file" multiple accept=".pdf,.ppt,.pptx,.step,.stp,.xls,.xlsx" onChange={(event) => setAttachments(Array.from(event.target.files ?? []).map((file) => file.name))} /></label></div>
             </div>
             <label className="consent"><input required type="checkbox" /> {c("我同意 JOYNEXT 使用以上信息联系我并评估本次采购需求。", "I agree that JOYNEXT may use this information to contact me and evaluate this purchasing request.")}</label>
             <div className="form-submit"><div><span className="live-dot" />{c("提交后由销售确认", "Sales will confirm after submission")}</div><button className="primary-button" type="submit">{c("提交项目需求", "Submit project request")} →</button></div>
@@ -1484,26 +1482,26 @@ function CustomFlow({
             <div className="live-estimate-main">
               <div className="live-estimate-label"><span>AI</span><p><small>PRELIMINARY RANGE</small><b>{c("初步参考估价", "Preliminary estimate")}</b></p></div>
               <strong>{priceEstimate.label}</strong>
-              <p>{c("根据机器人类型、项目阶段、项目节奏和需求复杂度估算。", "Estimated from robot type, project stage, timing and requirement complexity.")}</p>
+              <p>{c("基于场景、阶段与复杂度。", "Based on scope, stage and complexity.")}</p>
             </div>
             <div className="live-estimate-detail">
               <div>{priceEstimate.reasons.map((reason) => <span key={reason}>✓ {reason}</span>)}</div>
-              <p><b>{c("仅供参考，不构成正式报价。", "For reference only; not a formal quotation. ")}</b>{c("具体价格受最终配置、开发投入、测试认证、数量和交期影响，请与 JOYNEXT 销售确认。", "Final pricing depends on configuration, development effort, testing, certification, quantity and lead time. Please confirm with JOYNEXT sales.")}</p>
+              <p><b>{c("仅供参考。", "For reference only. ")}</b>{c("正式价格由销售确认。", "Sales confirms final pricing.")}</p>
             </div>
           </div>
           <button className="aside-ai-review" type="button" onClick={() => onAskAi(form.need.trim()
             ? locale === "zh" ? `请根据以下项目需求给出候选产品组合、缺失信息和工程风险：场景=${form.scene}；阶段=${form.stage}；需求=${form.need}` : `For this project request, suggest candidate products, missing information and engineering risks: application=${v(form.scene)}; stage=${v(form.stage)}; requirements=${form.need}`
             : locale === "zh" ? `请围绕${form.scene}和${brief.goal}目标，通过关键问题帮我补全一份可供工程师评估的需求描述。` : `For ${v(form.scene)} and ${v(brief.goal)}, ask key questions to help me complete a requirement description for engineering review.`)}>
-            <span>AI</span><p><b>{form.need.trim() ? c("检查当前需求", "Review current requirements") : c("帮我补全需求", "Help complete requirements")}</b><small>{c("依据产品资料识别候选项与待确认内容", "Use product data to identify candidates and open questions")}</small></p><em>→</em>
+            <span>AI</span><p><b>{form.need.trim() ? c("检查需求", "Review requirements") : c("补全需求", "Complete requirements")}</b><small>{c("候选产品与待确认项", "Candidates and open questions")}</small></p><em>→</em>
           </button>
-          <div className="sales-card"><span className="live-dot" /><small>SALES + ENGINEERING SUPPORT</small><h3>{c("已填写信息会随需求一起提交", "Your context stays with the request")}</h3><p>{c("场景、目标、候选产品、风险点和估价依据会整理到同一份摘要，减少后续重复沟通。", "Application, goals, candidate products, risks and estimate factors are kept in one summary to reduce repeated questions.")}</p><div className="avatar-row"><i>AI</i><i>{c("销", "S")}</i><i>{c("技", "E")}</i><span>{c("智能整理 + 专业确认", "Structured by AI + confirmed by specialists")}</span></div></div>
+          <div className="sales-card"><span className="live-dot" /><small>SALES + ENGINEERING</small><h3>{c("一次提交，持续跟进", "One request, continuous follow-up")}</h3><div className="avatar-row"><i>AI</i><i>{c("销", "S")}</i><i>{c("技", "E")}</i><span>{c("智能整理 + 专业确认", "AI structured + specialist confirmed")}</span></div></div>
           <div className="next-card"><h3>{c("提交后会发生什么", "What happens after submission")}</h3>{[
             ["1", c("需求确认", "Request received"), c("生成需求编号与摘要", "Reference and summary created")],
             ["2", c("销售联系", "Sales contact"), c("预计 2 小时内首次联系", "First contact expected within 2 hours")],
             ["3", c("工程评估", "Engineering review"), c("确认接口、风险与技术边界", "Confirm interfaces, risks and technical scope")],
             ["4", c("报价与计划", "Quote and plan"), c("预计 2 个工作日内提供", "Expected within 2 business days")],
           ].map(([n, h, p]) => <div key={n}><span>{n}</span><p><b>{h}</b><small>{p}</small></p></div>)}</div>
-          <div className="trust-card"><h3>{c("信息边界", "Information boundary")}</h3><p>{c("页面建议仅依据已提供资料。系统兼容、安全、法规、正式价格与最终设计结论由销售或工程师确认。", "Website guidance only uses available documentation. Compatibility, safety, regulations, formal pricing and final design decisions require sales or engineering confirmation.")}</p></div>
+          <div className="trust-card"><h3>{c("信息边界", "Information boundary")}</h3><p>{c("兼容、安全、价格与设计结论需专业确认。", "Compatibility, safety, pricing and design require specialist confirmation.")}</p></div>
         </aside>
       </section>
     </main>

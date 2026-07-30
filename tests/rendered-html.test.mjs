@@ -35,10 +35,10 @@ test("renders development preview metadata", async () => {
   assert.doesNotMatch(html, /不确定具体型号/);
   assert.match(html, /domain-controller-hero\.png/);
   assert.match(html, /按您的应用条件，筛选合适的产品/);
-  assert.match(html, /查看配置并提交采购意向/);
+  assert.match(html, /查看配置/);
   assert.match(html, /JOYNEXT AI 选型助理/);
   assert.match(html, /从需求出发/);
-  assert.match(html, /找到符合采购条件的候选产品/);
+  assert.match(html, /候选产品/);
   assert.match(html, /提交采购意向/);
   assert.match(html, /参考单价/);
   assert.match(html, /¥3,500–¥5,800/);
