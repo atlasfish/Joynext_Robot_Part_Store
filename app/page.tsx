@@ -159,6 +159,15 @@ function configuredUnitPrice(product: Product, configuration: Record<string, str
   const range = standardUnitPriceRanges[product.id];
   if (!range || !Object.keys(configuration).length) return null;
   const optionRatios = product.configuration.map((field) => {
+    if (field.key === "delivery") {
+      const deliveryUrgencyRatio: Record<string, number> = {
+        "尽快": 1,
+        "1 个月内": 0.8,
+        "3 个月内": 0.35,
+        "待销售确认": 0.5,
+      };
+      return deliveryUrgencyRatio[configuration[field.key]] ?? 0.5;
+    }
     const selectedIndex = Math.max(0, field.options.indexOf(configuration[field.key]));
     return field.options.length > 1 ? selectedIndex / (field.options.length - 1) : 0;
   });
@@ -261,7 +270,7 @@ const seedLeads: LeadRecord[] = [
   },
 ];
 
-function estimateCustomPrice(scene: string, stage: string, priority: string, need: string, locale: ClientLocale = "zh") {
+function estimateCustomPrice(scene: string, stage: string, priority: string, target: string, need: string, locale: ClientLocale = "zh") {
   const sceneBase: Record<string, number> = {
     "人形机器人": 160000,
     "AMR / AGV": 90000,
@@ -279,8 +288,19 @@ function estimateCustomPrice(scene: string, stage: string, priority: string, nee
   const complexityKeywords = ["定制", "安全", "认证", "散热", "功耗", "实时", "EtherCAT", "多传感器", "结构", "算法"];
   const complexityHits = complexityKeywords.filter((keyword) => need.includes(keyword)).length;
   const priorityFactor = priority === "紧急样机" ? 1.18 : priority === "量产项目" ? 1.28 : 1;
+  const deliveryFactor: Record<string, number> = {
+    "1 个月内": 1.3,
+    "3 个月内": 1.15,
+    "6 个月内": 1.02,
+    "12 个月内": 0.9,
+    "待确认": 1.08,
+  };
   const complexityFactor = 1 + Math.min(complexityHits, 4) * 0.08;
-  const midpoint = (sceneBase[scene] ?? 60000) * (stageFactor[stage] ?? 1.1) * priorityFactor * complexityFactor;
+  const midpoint = (sceneBase[scene] ?? 60000)
+    * (stageFactor[stage] ?? 1.1)
+    * priorityFactor
+    * (deliveryFactor[target] ?? 1.08)
+    * complexityFactor;
   const roundToTenThousand = (value: number) => Math.max(30000, Math.round(value / 10000) * 10000);
   const low = roundToTenThousand(midpoint * 0.72);
   const high = roundToTenThousand(midpoint * 1.38);
@@ -292,11 +312,13 @@ function estimateCustomPrice(scene: string, stage: string, priority: string, nee
       `${localizeValue(locale, scene)} solution and prototype adaptation`,
       `Engineering input for the ${localizeValue(locale, stage)} stage`,
       priority === "紧急样机" ? "Urgent prototype resource coordination" : priority === "量产项目" ? "Production-introduction and validation preparation" : "Standard delivery planning",
+      target === "1 个月内" ? "Expedited delivery within 1 month" : target === "3 个月内" ? "Delivery planning within 3 months" : target === "6 个月内" ? "Delivery planning within 6 months" : target === "12 个月内" ? "Planned delivery within 12 months" : "Delivery timing risk allowance",
     ]
     : [
       `${scene}方案与样机适配`,
       `${stage}阶段的工程投入`,
       priority === "紧急样机" ? "加急样机资源协调" : priority === "量产项目" ? "量产导入与验证准备" : "常规交付节奏",
+      target === "1 个月内" ? "1 个月内加急交付协调" : target === "3 个月内" ? "3 个月目标交期" : target === "6 个月内" ? "6 个月计划交付" : target === "12 个月内" ? "12 个月计划交付" : "交期未定风险预留",
     ];
   if (complexityHits) reasons.push(locale === "en" ? `${complexityHits} complex technical constraints` : `${complexityHits} 项复杂技术约束`);
   return { low, high, label: `${format(low)} – ${format(high)}`, reasons };
@@ -1417,7 +1439,7 @@ function CustomFlow({
     volume: "", stage: brief.stage === "概念设计" ? "概念设计" : brief.stage, target: "3 个月内", need: "",
   });
   const update = (key: keyof typeof form, value: string) => setForm((current) => ({ ...current, [key]: value }));
-  const priceEstimate = estimateCustomPrice(form.scene, form.stage, priority, form.need, locale);
+  const priceEstimate = estimateCustomPrice(form.scene, form.stage, priority, form.target, form.need, locale);
   const requirementChecks = [
     { label: c("任务目标", "Task"), done: form.need.trim().length >= 18 },
     { label: c("接口 / 平台", "Interface / platform"), done: /接口|EtherCAT|CAN|USB|RS485|平台|控制器|interface|platform|controller/i.test(form.need) },
