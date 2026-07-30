@@ -366,6 +366,8 @@ function ProductsModule({
                 <label><span>产品型号</span><input value={selected.model} onChange={(event) => updateSelected({ model: event.target.value })} /></label>
                 <label><span>商品分类</span><select value={selected.kind} onChange={(event) => updateSelected({ kind: event.target.value })}><option>计算与控制</option><option>3D 感知</option><option>环境感知</option><option>运动感知</option></select></label>
                 <label><span>价格展示</span><input value={selected.price} onChange={(event) => updateSelected({ price: event.target.value })} placeholder="如 ¥3,500–¥5,800 / 件" /></label>
+                <label><span>供货说明</span><input value={selected.lead} onChange={(event) => updateSelected({ lead: event.target.value })} placeholder="库存与交期需确认" /></label>
+                <label className="wide"><span>商品图片路径</span><input value={selected.image} onChange={(event) => updateSelected({ image: event.target.value })} placeholder="/products/example.webp" /></label>
                 <label className="wide"><span>产品简介</span><textarea value={selected.description} onChange={(event) => updateSelected({ description: event.target.value })} /></label>
                 <label className="wide"><span>关键参数（每行一项）</span><textarea value={selected.verified.join("\n")} onChange={(event) => updateSelected({ verified: event.target.value.split("\n").map((item) => item.trim()).filter(Boolean) })} /></label>
               </div>
