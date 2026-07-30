@@ -569,6 +569,7 @@ function Header({
           </div>
         </div>
         <button onClick={() => onNavigateSection("scenarios")}>{c("应用场景", "Applications")}</button>
+        <button onClick={() => onNavigateSection("workflow")}>{c("采购方案", "Request options")}</button>
         <button onClick={() => onNavigateSection("support")}>{c("选型支持", "Selection support")}</button>
         <button onClick={() => onNavigateSection("contact")}>{c("联系方式", "Contact")}</button>
       </nav>

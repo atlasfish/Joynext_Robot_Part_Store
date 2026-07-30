@@ -80,7 +80,8 @@ test("streams non-thinking Qwen responses and renders Markdown safely", async ()
   assert.match(page, /product-nav-dropdown/);
   assert.match(page, /contact@joynext\.com/);
   assert.match(page, /tel:\+8657487127249/);
-  assert.doesNotMatch(page, /onNavigateSection\("workflow"\)/);
+  assert.match(page, /onNavigateSection\("workflow"\)/);
+  assert.match(page, /采购方案/);
   assert.match(styles, /\.floating-order-button:hover/);
   assert.match(styles, /\.contact-footer/);
 });
