@@ -919,8 +919,7 @@ function Home({
 
         <section className="path-section" id="workflow">
           <div className="section-heading center" data-reveal>
-            <span>TWO WAYS TO REQUEST</span>
-            <h2>{c("根据需求清晰度，选择提交方式", "Choose the right request path")}</h2>
+            <h2>TWO WAYS TO REQUEST</h2>
             <p>{c("标准件直接询价，复杂项目联合评估。", "Request standard products or review complex projects.")}</p>
           </div>
           <div className="path-grid">
