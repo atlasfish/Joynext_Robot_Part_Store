@@ -867,45 +867,25 @@ function Home({
 
   return (
     <>
-      <section className="hero">
-        <div className="hero-ambient ambient-one" data-parallax="slow" />
-        <div className="hero-ambient ambient-two" data-parallax="fast" />
+      <section className="hero hero-minimal">
         <div className="hero-grid">
           <div className="hero-copy" data-reveal>
-            <div className="eyebrow"><span /> ROBOTICS COMPONENTS</div>
             <h1>{c("从需求出发，", "Find the right component,")}<br /><em>{c("找到合适的产品", "starting with your application")}</em></h1>
-            <p>{c(
-              "按用途、距离和接口快速选型；复杂需求可转销售与工程师。",
-              "Shortlist by task, range and interface. Specialists support complex needs.",
-            )}</p>
             <form className="search-box" onSubmit={startSearch}>
               <label>
-                <span className="search-icon">⌕</span>
+                <svg className="search-icon" aria-hidden="true" viewBox="0 0 24 24">
+                  <circle cx="11" cy="11" r="6.5" />
+                  <path d="m16 16 4 4" />
+                </svg>
                 <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder={c("搜索型号，或描述用途、距离和接口", "Search a model or describe the task, range and interface")} />
               </label>
               <button type="submit" className="primary-button">{query.trim() ? c("查看匹配", "View matches") : c("帮我选型", "Find a product")}</button>
             </form>
           </div>
-          <div className="hero-product-stage" data-reveal data-parallax="slow">
-            <div className="product-halo" />
-            <span className="stage-kicker">nRB-H1 · ROBOT DOMAIN CONTROLLER</span>
+          <div className="hero-product-stage" data-reveal>
             <img src={withBasePath("/products/domain-controller-hero.png")} alt={c("nRB-H1 机器人域控制器写实渲染图", "Photorealistic nRB-H1 robot domain controller")} />
-            <div className="stage-caption">
-              <span><i /> {v("初步工程状态")}</span>
-              <strong>{c("脑—小脑融合计算平台", "Integrated AI computing & real-time control")}</strong>
-              <button onClick={() => {
-                const product = products.find((item) => item.id === "controller-h1") ?? products[0];
-                onSelect(product);
-                onNavigate("standard");
-              }}>{c("查看产品", "View product")} <b>↗</b></button>
-            </div>
-            <div className="stage-spec spec-top"><b>≤ 1 ms</b><span>{c("硬实时控制周期", "Hard real-time cycle")}</span></div>
-            <div className="stage-spec spec-bottom"><b>2,070 TOPS</b><span>{c("整机峰值算力", "Peak system compute")}</span></div>
           </div>
         </div>
-        <button className="scroll-cue" type="button" onClick={() => document.getElementById("ai-discovery")?.scrollIntoView({ behavior: "smooth", block: "start" })}>
-          <span /> {c("智能选型", "Guided selection")}
-        </button>
       </section>
 
       <main className="customer-home">
