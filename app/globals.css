@@ -905,12 +905,10 @@ button { letter-spacing: -.01em; }
 .hero-product-stage > img {
   position: relative;
   z-index: 2;
-  width: min(480px, 88%);
-  max-height: 350px;
+  width: min(620px, 108%);
+  max-height: 430px;
   object-fit: contain;
   filter: drop-shadow(0 38px 35px rgba(0,0,0,.46));
-  -webkit-mask-image: radial-gradient(ellipse at center, #000 64%, transparent 96%);
-  mask-image: radial-gradient(ellipse at center, #000 64%, transparent 96%);
   transform: perspective(900px) rotateX(3deg) rotateY(-5deg);
   animation: productFloat 6s ease-in-out infinite;
 }
