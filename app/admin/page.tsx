@@ -11,6 +11,7 @@ import {
   type ProductLifecycle,
 } from "@/lib/product-operations";
 import "./admin.css";
+import "./swiss-admin.css";
 
 type AdminTab = "overview" | "products" | "leads" | "customers" | "orders" | "tasks";
 type LeadStatus = "新线索" | "工程评审" | "销售跟进" | "培育中" | "已转机会" | "已关闭";
@@ -90,12 +91,12 @@ const demoLeads: Lead[] = [
 ];
 
 const tabMeta: Array<{ id: AdminTab; icon: string; label: string; note: string }> = [
-  { id: "overview", icon: "⌂", label: "经营概览", note: "关键指标与转化" },
-  { id: "products", icon: "◇", label: "商品运营", note: "信息、上下线与预售" },
-  { id: "leads", icon: "◎", label: "线索中心", note: "评分与业务路由" },
-  { id: "customers", icon: "♙", label: "客户档案", note: "公司与历史记录" },
-  { id: "orders", icon: "▣", label: "订单管理", note: "报价与履约状态" },
-  { id: "tasks", icon: "✓", label: "跟进任务", note: "SLA 与待办事项" },
+  { id: "overview", icon: "01", label: "经营概览", note: "关键指标与转化" },
+  { id: "products", icon: "02", label: "商品运营", note: "信息、上下线与预售" },
+  { id: "leads", icon: "03", label: "线索中心", note: "评分与业务路由" },
+  { id: "customers", icon: "04", label: "客户档案", note: "公司与历史记录" },
+  { id: "orders", icon: "05", label: "订单管理", note: "报价与履约状态" },
+  { id: "tasks", icon: "06", label: "跟进任务", note: "SLA 与待办事项" },
 ];
 
 const statusOptions: LeadStatus[] = ["新线索", "工程评审", "销售跟进", "培育中", "已转机会", "已关闭"];
@@ -543,7 +544,7 @@ export default function AdminPage() {
   return (
     <div className="admin-shell">
       <aside className="admin-sidebar">
-        <Link className="admin-brand" href="/"><img src={withBasePath("/assets/brand/joynext-logo-light.png")} alt="JOYNEXT 均联智行" /></Link>
+        <Link className="admin-brand" href="/"><img src={withBasePath("/assets/brand/joynext-logo-dark.png")} alt="JOYNEXT 均联智行" /></Link>
         <div className="admin-portal-label"><span>ADMIN PORTAL</span><small>数字化销售运营中心</small></div>
         <nav>
           {tabMeta.map((item) => <button className={tab === item.id ? "active" : ""} onClick={() => { setTab(item.id); setQuery(""); window.history.replaceState(null, "", `#${item.id}`); }} key={item.id}><i>{item.icon}</i><span><b>{item.label}</b><small>{item.note}</small></span>{item.id === "leads" && <em>{leads.filter((lead) => lead.status === "新线索").length}</em>}</button>)}

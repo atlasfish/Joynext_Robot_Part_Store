@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
+import "./design-tokens.css";
+import "./swiss.css";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 

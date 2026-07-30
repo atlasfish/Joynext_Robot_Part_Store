@@ -1,0 +1,122 @@
+/*
+ * JOYNEXT Swiss design system
+ * Primitive → semantic → component tokens.
+ */
+:root {
+  /* Primitive color tokens */
+  --jn-black: #111111;
+  --jn-charcoal: #242424;
+  --jn-gray-900: #343434;
+  --jn-gray-700: #565656;
+  --jn-gray-500: #767676;
+  --jn-gray-300: #b9b9b6;
+  --jn-gray-200: #d9d9d5;
+  --jn-gray-100: #ecece8;
+  --jn-gray-050: #f5f5f1;
+  --jn-paper: #fafaf7;
+  --jn-white: #ffffff;
+  --jn-teal-700: #006d73;
+  --jn-teal-600: #007f86;
+  --jn-teal-500: #009aa2;
+  --jn-teal-100: #d9eeee;
+  --jn-teal-050: #eef7f6;
+  --jn-red-600: #b42318;
+  --jn-amber-600: #8a5a00;
+  --jn-green-700: #176b45;
+
+  /* Primitive layout tokens: 8px mathematical rhythm */
+  --jn-space-1: 4px;
+  --jn-space-2: 8px;
+  --jn-space-3: 12px;
+  --jn-space-4: 16px;
+  --jn-space-5: 24px;
+  --jn-space-6: 32px;
+  --jn-space-7: 48px;
+  --jn-space-8: 64px;
+  --jn-space-9: 96px;
+  --jn-space-10: 128px;
+  --jn-gutter: clamp(20px, 4vw, 64px);
+  --jn-content: 1440px;
+  --jn-grid-gap: clamp(16px, 2vw, 32px);
+
+  /* Primitive typography tokens */
+  --jn-font-sans: var(--font-geist-sans), "Helvetica Neue", Helvetica, Arial, "PingFang SC", "Microsoft YaHei", sans-serif;
+  --jn-font-mono: var(--font-geist-mono), "SFMono-Regular", Consolas, monospace;
+  --jn-text-xs: 12px;
+  --jn-text-sm: 14px;
+  --jn-text-base: 16px;
+  --jn-text-lg: 20px;
+  --jn-text-xl: 24px;
+  --jn-text-2xl: 32px;
+  --jn-text-3xl: 48px;
+  --jn-text-display: clamp(54px, 7vw, 104px);
+
+  /* Primitive shape and motion tokens */
+  --jn-radius-none: 0;
+  --jn-radius-sm: 2px;
+  --jn-radius-md: 4px;
+  --jn-radius-pill: 999px;
+  --jn-line: 1px;
+  --jn-duration-fast: 160ms;
+  --jn-duration-normal: 240ms;
+  --jn-ease: cubic-bezier(.2, .72, .2, 1);
+
+  /* Semantic tokens */
+  --color-background: var(--jn-paper);
+  --color-surface: var(--jn-white);
+  --color-surface-subtle: var(--jn-gray-050);
+  --color-surface-strong: var(--jn-black);
+  --color-foreground: var(--jn-black);
+  --color-muted-foreground: var(--jn-gray-700);
+  --color-subtle-foreground: var(--jn-gray-500);
+  --color-border: var(--jn-gray-200);
+  --color-border-strong: var(--jn-black);
+  --color-primary: var(--jn-black);
+  --color-primary-hover: var(--jn-gray-900);
+  --color-on-primary: var(--jn-white);
+  --color-accent: var(--jn-teal-600);
+  --color-accent-hover: var(--jn-teal-700);
+  --color-accent-soft: var(--jn-teal-050);
+  --color-on-accent: var(--jn-white);
+  --color-success: var(--jn-green-700);
+  --color-warning: var(--jn-amber-600);
+  --color-error: var(--jn-red-600);
+  --color-focus: var(--jn-teal-500);
+
+  /* Compatibility aliases while legacy components migrate to semantic names */
+  --ink: var(--color-foreground);
+  --navy: var(--color-primary);
+  --navy-2: var(--jn-gray-900);
+  --blue: var(--color-accent);
+  --blue-2: var(--jn-teal-500);
+  --cyan: var(--jn-teal-500);
+  --muted: var(--color-muted-foreground);
+  --line: var(--color-border);
+  --soft: var(--color-surface-subtle);
+  --green: var(--color-success);
+  --orange: var(--color-warning);
+  --storefront-blue: var(--color-accent);
+  --storefront-blue-hover: var(--color-accent-hover);
+  --storefront-ink: var(--color-foreground);
+  --storefront-muted: var(--color-muted-foreground);
+  --storefront-soft: var(--color-surface-subtle);
+  --storefront-line: var(--color-border);
+
+  /* Component tokens */
+  --button-height: 48px;
+  --button-padding-x: 20px;
+  --button-radius: var(--jn-radius-sm);
+  --button-bg: var(--color-accent);
+  --button-bg-hover: var(--color-accent-hover);
+  --button-fg: var(--color-on-accent);
+  --input-height: 48px;
+  --input-bg: var(--color-surface);
+  --input-border: var(--color-border);
+  --input-border-focus: var(--color-focus);
+  --input-radius: var(--jn-radius-sm);
+  --card-bg: var(--color-surface);
+  --card-border: var(--color-border);
+  --card-radius: var(--jn-radius-sm);
+  --card-padding: var(--jn-space-5);
+  --header-height: 64px;
+}
