@@ -4,13 +4,19 @@ import { createContext, FormEvent, useContext, useEffect, useMemo, useRef, useSt
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
 import { productCatalog, type CatalogProduct } from "@/lib/product-catalog";
-import { localizeValue, stripRequiredMark, type ClientLocale } from "@/lib/client-i18n";
+import { localizeValue, type ClientLocale } from "@/lib/client-i18n";
 
 type View = "home" | "standard" | "custom";
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH ?? "";
 const withBasePath = (path: string) => `${basePath}${path}`;
 
 type Product = Omit<CatalogProduct, "image"> & { image: string };
+
+type ProcurementItem = {
+  productId: string;
+  quantity: number;
+  configuration: Record<string, string>;
+};
 
 type DiscoveryBrief = {
   scene: "AMR / AGV" | "人形机器人" | "协作机械臂" | "服务机器人";
@@ -555,39 +561,6 @@ function Progress({ step, custom = false }: { step: number; custom?: boolean }) 
   );
 }
 
-function BuyerNeedBar({
-  view,
-  onOpenAssistant,
-}: {
-  view: View;
-  onOpenAssistant: () => void;
-}) {
-  const { c } = useClientCopy();
-  const content = view === "home"
-    ? {
-      title: c("不确定具体型号？", "Not sure which model fits?"),
-      detail: c("告诉我们用途、工作距离、接口和数量，先获得候选产品。", "Share your task, working range, interface and quantity to get a shortlist."),
-      action: c("帮我选型", "Find a product"),
-    }
-    : view === "standard"
-      ? {
-        title: c("正在准备采购意向", "Preparing your purchase request"),
-        detail: c("核对配置、数量和收货信息，价格、库存与交期由销售确认。", "Review configuration, quantity and delivery details; sales will confirm price, stock and lead time."),
-        action: c("咨询配置", "Ask about configuration"),
-      }
-      : {
-        title: c("需要工程配合？", "Need engineering input?"),
-        detail: c("补充技术边界和项目计划，我们会安排销售与工程师联合评估。", "Add technical constraints and project timing for a joint sales and engineering review."),
-        action: c("咨询需求", "Discuss requirements"),
-      };
-  return (
-    <section className="buyer-need-bar" aria-label={c("采购选型帮助", "Product selection help")}>
-      <div><span>?</span><p><b>{content.title}</b><small>{content.detail}</small></p></div>
-      <button onClick={onOpenAssistant}>{content.action} <i>→</i></button>
-    </section>
-  );
-}
-
 function AiDiscoveryWorkspace({
   brief,
   onBriefChange,
@@ -766,7 +739,7 @@ function Home({
           <div className="hero-product-stage" data-reveal data-parallax="slow">
             <div className="product-halo" />
             <span className="stage-kicker">nRB-H1 · ROBOT DOMAIN CONTROLLER</span>
-            <img src={withBasePath("/products/domain-controller.png")} alt="nRB-H1 机器人域控制器" />
+            <img src={withBasePath("/products/domain-controller-hero.png")} alt={c("nRB-H1 机器人域控制器写实渲染图", "Photorealistic nRB-H1 robot domain controller")} />
             <div className="stage-caption">
               <span><i /> {v("初步工程状态")}</span>
               <strong>{c("脑—小脑融合计算平台", "Integrated AI computing & real-time control")}</strong>
@@ -944,6 +917,7 @@ function StandardFlow({
   const [step, setStep] = useState(1);
   const [qty, setQty] = useState(1);
   const [productConfigurations, setProductConfigurations] = useState<Record<string, Record<string, string>>>({});
+  const [procurementItems, setProcurementItems] = useState<ProcurementItem[]>([]);
   const [orderId, setOrderId] = useState("");
   const [customer, setCustomer] = useState<StandardCustomer>({
     company: "",
@@ -959,6 +933,7 @@ function StandardFlow({
     setCustomer((current) => ({ ...current, [key]: value }));
   const configuration = productConfigurations[selected.id]
     ?? Object.fromEntries(selected.configuration.map((item) => [item.key, item.options[0]]));
+  const selectedProcurementItem = procurementItems.find((item) => item.productId === selected.id);
   const setConfigurationValue = (key: string, value: string) =>
     setProductConfigurations((current) => ({
       ...current,
@@ -966,8 +941,25 @@ function StandardFlow({
     }));
   const engineering = selected.engineeringReview;
   const primaryInterface = configuration.interface ?? configuration.realtime ?? configuration.network ?? "按所选方案";
-  const hasStandardPrice = Boolean(standardUnitPriceRanges[selected.id]);
   const estimatedTotalLabel = standardPriceLabel(selected.id, locale, qty);
+  const procurementProducts = procurementItems.map((item) => ({
+    ...item,
+    product: products.find((product) => product.id === item.productId)!,
+  })).filter((item) => item.product);
+  const totalProcurementQuantity = procurementItems.reduce((total, item) => total + item.quantity, 0);
+  const pricedProcurementItems = procurementItems.filter((item) => standardUnitPriceRanges[item.productId]);
+  const procurementPriceRange = pricedProcurementItems.reduce((total, item) => {
+    const range = standardUnitPriceRanges[item.productId];
+    return {
+      low: total.low + range.low * item.quantity,
+      high: total.high + range.high * item.quantity,
+    };
+  }, { low: 0, high: 0 });
+  const procurementPriceLabel = procurementItems.length === 0
+    ? c("尚未加入产品", "No products added")
+    : pricedProcurementItems.length === 0
+      ? c("评估后报价", "Quoted after review")
+      : `${locale === "zh" ? "¥" : "RMB "}${procurementPriceRange.low.toLocaleString()}–${locale === "zh" ? "¥" : "RMB "}${procurementPriceRange.high.toLocaleString()}${pricedProcurementItems.length < procurementItems.length ? c(" + 待报价项", " + items pending quote") : ""}`;
   const customerComplete = [customer.company, customer.contact, customer.contactDetail, customer.country, customer.city, customer.address]
     .every((value) => value.trim().length > 0);
   const customerLocation = `${v(customer.country)} · ${customer.city}`;
@@ -1001,15 +993,49 @@ function StandardFlow({
     },
   ];
 
+  function selectProcurementProduct(product: Product) {
+    onSelect(product);
+    setQty(procurementItems.find((item) => item.productId === product.id)?.quantity ?? 1);
+  }
+
+  function addCurrentToProcurement() {
+    if (engineering) return;
+    const item: ProcurementItem = {
+      productId: selected.id,
+      quantity: qty,
+      configuration: { ...configuration },
+    };
+    setProcurementItems((current) => [
+      ...current.filter((existing) => existing.productId !== selected.id),
+      item,
+    ]);
+  }
+
+  function updateProcurementQuantity(productId: string, quantity: number) {
+    const nextQuantity = Math.max(1, quantity);
+    setProcurementItems((current) => current.map((item) =>
+      item.productId === productId ? { ...item, quantity: nextQuantity } : item));
+    if (selected.id === productId) setQty(nextQuantity);
+  }
+
+  function removeProcurementItem(productId: string) {
+    setProcurementItems((current) => current.filter((item) => item.productId !== productId));
+  }
+
   function submitStandardOrder() {
-    if (!customerComplete || engineering || orderId) return;
+    if (!customerComplete || procurementItems.length === 0 || orderId) return;
+    // The request number is generated only in this user-triggered submit handler.
+    // eslint-disable-next-line react-hooks/purity
     const id = `JN-20260729-${Date.now().toString().slice(-4)}`;
-    const score = Math.min(95, 68 + (qty > 10 ? 12 : qty > 3 ? 7 : 3) + (customer.companyType === "机器人整机厂商" ? 8 : 5));
+    const score = Math.min(95, 68 + (totalProcurementQuantity > 10 ? 12 : totalProcurementQuantity > 3 ? 7 : 3) + (procurementItems.length > 1 ? 5 : 0) + (customer.companyType === "机器人整机厂商" ? 8 : 5));
     const priority: LeadRecord["priority"] = score >= 75 ? "高" : score >= 55 ? "中" : "低";
+    const itemSummary = procurementProducts.map(({ product, quantity, configuration: itemConfiguration }, index) =>
+      `${index + 1}. ${product.model} ${product.name} × ${quantity} 件（${Object.entries(itemConfiguration).map(([key, value]) => `${key}=${value}`).join("；")}）`).join("\n");
+    const models = procurementProducts.map(({ product }) => product.model).join(" / ");
     const lead: LeadRecord = {
       id,
       createdAt: "刚刚",
-      source: "标准订单",
+      source: procurementItems.length > 1 ? "集采报单" : "标准订单",
       company: customer.company.trim(),
       companyType: customer.companyType,
       contact: customer.contact.trim(),
@@ -1018,19 +1044,21 @@ function StandardFlow({
       city: customer.city.trim(),
       score,
       status: "新线索",
-      route: qty > 10 ? "销售高优先级" : "销售",
+      route: totalProcurementQuantity > 10 || procurementItems.length > 1 ? "销售高优先级" : "销售",
       priority,
-      product: selected.name,
-      model: selected.model,
-      productImage: selected.image,
-      quantity: `${qty} 件`,
-      scene: selected.kind,
-      stage: qty > 10 ? "小批量验证" : "样品 / Demo",
-      target: selected.lead,
-      need: `客户选择 ${Object.entries(configuration).map(([key, value]) => `${key}=${value}`).join("；")}，提交 ${qty} 件采购意向，需要确认正式价格、库存和交期。`,
+      product: procurementItems.length > 1 ? `集采报单（${procurementItems.length} 项产品）` : procurementProducts[0].product.name,
+      model: models,
+      productImage: procurementProducts[0].product.image,
+      quantity: `${procurementItems.length} 项 / ${totalProcurementQuantity} 件`,
+      scene: [...new Set(procurementProducts.map(({ product }) => product.kind))].join(" / "),
+      stage: totalProcurementQuantity > 10 ? "小批量验证" : "样品 / Demo",
+      target: procurementItems.length > 1 ? "多产品交期由销售统一确认" : procurementProducts[0].product.lead,
+      need: `客户一次性提交集采报单，共 ${procurementItems.length} 项、${totalProcurementQuantity} 件：\n${itemSummary}\n需要统一确认正式价格、库存、分批交付与整体交期。`,
       address: `${customer.country} ${customer.city} ${customer.address}${customer.postalCode ? `，${customer.postalCode}` : ""}`,
-      nextAction: qty > 10 ? "销售确认批量库存、阶梯价格和交付排期。" : "销售确认订单、正式价格和发货安排。",
-      estimatedPrice: hasStandardPrice ? standardPriceLabel(selected.id, "zh", qty) : "工程确认后报价",
+      nextAction: procurementItems.length > 1 ? "销售核对集采明细，合并确认价格、库存与交付排期。" : totalProcurementQuantity > 10 ? "销售确认批量库存、阶梯价格和交付排期。" : "销售确认订单、正式价格和发货安排。",
+      estimatedPrice: procurementItems.length
+        ? `${procurementPriceRange.low ? `¥${procurementPriceRange.low.toLocaleString()}–¥${procurementPriceRange.high.toLocaleString()}` : "评估后报价"}${pricedProcurementItems.length < procurementItems.length ? " + 待报价项" : ""}`
+        : "评估后报价",
     };
     setOrderId(id);
     onLeadCreated(lead);
@@ -1062,10 +1090,10 @@ function StandardFlow({
               </select>
             </div>
           </div>
-          <ProductList selected={selected} onSelect={onSelect} recommendedId={recommended.product.id} />
+          <ProductList selected={selected} onSelect={selectProcurementProduct} recommendedId={recommended.product.id} />
           <div className="sticky-actions">
             <div><span>{c("当前选择", "Selected")}</span><strong>{selected.model} · {v(selected.name)}</strong></div>
-            <button className="primary-button" onClick={() => setStep(2)}>{c("查看配置", "Configure product")} →</button>
+            <button className="primary-button" onClick={() => setStep(2)}>{c("配置并加入采购栏", "Configure and add")} →</button>
           </div>
         </section>
       )}
@@ -1175,20 +1203,42 @@ function StandardFlow({
             </div>
           </div>
           <aside className="order-summary">
-            <span className="summary-label">{c("采购意向摘要", "Purchase request summary")}</span>
-            <img src={selected.image} alt="" />
-            <small>{selected.model}</small>
-            <h2>{v(selected.name)}</h2>
-            <dl>
-              {selected.configuration.slice(0, 3).map((item) => <div key={item.key}><dt>{stripRequiredMark(v(item.label))}</dt><dd>{v(configuration[item.key])}</dd></div>)}
-              <div><dt>{c("数量", "Quantity")}</dt><dd>{qty} {c("件", "pcs")}</dd></div><div><dt>{c("交期", "Lead time")}</dt><dd>{v(selected.lead)}</dd></div>
+            <div className="procurement-heading">
+              <div><span className="summary-label">PROCUREMENT LIST</span><h2>{c("采购栏", "Procurement list")}</h2></div>
+              <b>{procurementItems.length}</b>
+            </div>
+            <div className="procurement-current">
+              <div><img src={selected.image} alt="" /><span><small>{selected.model}</small><strong>{v(selected.name)}</strong><em>{qty} {c("件", "pcs")} · {estimatedTotalLabel}</em></span></div>
+              <button type="button" disabled={engineering} onClick={addCurrentToProcurement}>
+                {selectedProcurementItem ? c("更新当前产品", "Update this product") : c("加入采购栏", "Add to procurement list")} ＋
+              </button>
+              {engineering && <small>{c("该产品需工程评估，不能直接加入标准件集采报单。", "This product requires engineering review and cannot be added to a standard procurement request.")}</small>}
+            </div>
+            <div className="procurement-items">
+              {procurementProducts.length ? procurementProducts.map(({ product, quantity }) => (
+                <article key={product.id}>
+                  <img src={product.image} alt="" />
+                  <div><small>{product.model}</small><strong>{v(product.name)}</strong><em>{standardPriceLabel(product.id, locale, quantity)}</em></div>
+                  <div className="procurement-item-actions">
+                    <button type="button" onClick={() => updateProcurementQuantity(product.id, quantity - 1)}>−</button>
+                    <span>{quantity}</span>
+                    <button type="button" onClick={() => updateProcurementQuantity(product.id, quantity + 1)}>＋</button>
+                    <button type="button" className="remove" onClick={() => removeProcurementItem(product.id)} aria-label={c("移除产品", "Remove product")}>×</button>
+                  </div>
+                </article>
+              )) : <div className="procurement-empty"><b>{c("采购栏还是空的", "Your procurement list is empty")}</b><span>{c("配置产品后加入，可一次提交多项采购需求。", "Configure products and add them for one consolidated submission.")}</span></div>}
+            </div>
+            <button type="button" className="procurement-more" onClick={() => setStep(1)}>＋ {c("继续添加产品", "Add another product")}</button>
+            <dl className="procurement-totals">
+              <div><dt>{c("产品项", "Line items")}</dt><dd>{procurementItems.length} {c("项", "items")}</dd></div>
+              <div><dt>{c("总数量", "Total quantity")}</dt><dd>{totalProcurementQuantity} {c("件", "pcs")}</dd></div>
             </dl>
-            <div className="price-row"><span>{hasStandardPrice ? c("参考总价", "Indicative total") : c("价格", "Price")}</span><strong>{estimatedTotalLabel}</strong></div>
+            <div className="price-row"><span>{c("集采参考总价", "Indicative total")}</span><strong>{procurementPriceLabel}</strong></div>
             <p className="small-note">{customerComplete
               ? locale === "zh" ? `客户：${customer.company} · ${customerLocation}。` : `Customer: ${customer.company} · ${customerLocation}. `
               : c("请完整填写公司、联系人和收货地址后提交。", "Complete the company, contact and delivery details before submitting. ")}
               {c("页面信息不构成正式报价，最终以 JOYNEXT 报价单或订单确认为准。", "Information shown here is not a formal quotation. Final terms are subject to a JOYNEXT quotation or order confirmation.")}</p>
-            <button className="primary-button full" disabled={engineering || !customerComplete} onClick={submitStandardOrder}>{c("提交采购意向", "Submit purchase request")} →</button>
+            <button className="primary-button full" disabled={!procurementItems.length || !customerComplete} onClick={submitStandardOrder}>{c("一次提交并生成报单", "Submit and create request")} →</button>
             {engineering && <button className="outline-button full" onClick={onCustom}>{c("申请工程评估", "Request engineering review")}</button>}
           </aside>
         </section>
@@ -1196,14 +1246,27 @@ function StandardFlow({
       {step === 3 && (
         <section className="confirmation">
           <div className="success-mark">✓</div>
-          <span>PURCHASE REQUEST RECEIVED</span>
-          <h1>{c("采购意向已提交", "Purchase request submitted")}</h1>
-          <p>{c("询价编号", "Reference")} <b>{orderId}</b>。{c("销售将联系您确认正式价格、库存、交期和订单信息。", "Sales will contact you to confirm formal pricing, stock, lead time and order details.")}</p>
+          <span>CONSOLIDATED REQUEST CREATED</span>
+          <h1>{c("集采报单已生成", "Procurement request created")}</h1>
+          <p>{c("报单编号", "Request number")} <b>{orderId}</b>。{c("所有产品已一次提交，销售将统一确认正式价格、库存、交期和订单信息。", "All products were submitted together. Sales will confirm pricing, stock, lead time and order details in one follow-up.")}</p>
           <div className="confirmation-card">
-            <div><small>{c("产品", "Product")}</small><strong>{selected.model} · {v(selected.name)}</strong></div>
-            <div><small>{c("数量", "Quantity")}</small><strong>{qty} {c("件", "pcs")}</strong></div>
-            <div><small>{c("关键配置", "Key configuration")}</small><strong>{v(primaryInterface)}</strong></div>
-            <div><small>{c("交期状态", "Lead-time status")}</small><strong>{v(selected.lead)}</strong></div>
+            <div><small>{c("产品项", "Line items")}</small><strong>{procurementItems.length} {c("项", "items")}</strong></div>
+            <div><small>{c("总数量", "Total quantity")}</small><strong>{totalProcurementQuantity} {c("件", "pcs")}</strong></div>
+            <div><small>{c("参考总价", "Indicative total")}</small><strong>{procurementPriceLabel}</strong></div>
+            <div><small>{c("处理方式", "Handling")}</small><strong>{c("统一报价与排期", "Consolidated quote and schedule")}</strong></div>
+          </div>
+          <div className="generated-procurement-sheet">
+            <div><span>{c("集采明细", "Procurement details")}</span><b>{orderId}</b></div>
+            {procurementProducts.map(({ product, quantity, configuration: itemConfiguration }, index) => (
+              <article key={product.id}>
+                <span>{String(index + 1).padStart(2, "0")}</span>
+                <img src={product.image} alt="" />
+                <div><small>{product.model}</small><strong>{v(product.name)}</strong><p>{Object.values(itemConfiguration).slice(0, 3).map(v).join(" · ")}</p></div>
+                <b>× {quantity}</b>
+                <em>{standardPriceLabel(product.id, locale, quantity)}</em>
+              </article>
+            ))}
+            <p>{c("仅供采购沟通与内部跟进，不构成正式报价。具体价格、库存、交期及履约条件以销售确认后的正式文件为准。", "For purchasing communication and internal follow-up only; this is not a formal quotation. Final pricing, stock, lead time and delivery terms require sales confirmation.")}</p>
           </div>
           <div className="customer-profile-card">
             <div className="customer-profile-heading"><span>{c("联系与收货信息", "Contact and delivery details")}</span><b>{c("已随采购意向提交", "Submitted with your request")}</b></div>
@@ -1218,6 +1281,7 @@ function StandardFlow({
           <div className="sales-timeline"><div className="done"><span>✓</span><b>{c("意向提交", "Request sent")}</b></div><i /><div className="active"><span>2</span><b>{c("销售确认", "Sales review")}</b></div><i /><div><span>3</span><b>{c("报价与订单", "Quote & order")}</b></div></div>
           <div className="confirmation-actions">
             <button className="outline-button" onClick={onComplete}>{c("返回首页", "Back to homepage")}</button>
+            <button className="outline-button" onClick={() => window.print()}>{c("打印 / 保存报单", "Print / save request")}</button>
             <button className="primary-button" onClick={() => onAskAi(c("我已经提交采购意向，请告诉我接下来需要准备哪些信息。", "I have submitted a purchase request. What information should I prepare next?"))}>{c("咨询下一步", "Ask about next steps")} →</button>
           </div>
         </section>
@@ -1702,7 +1766,6 @@ export default function HomePage() {
       <div>
         <MotionEffects />
         <Header onNavigate={navigate} onNavigateSection={navigateToSection} onOpenAssistant={() => openAssistant()} />
-        <BuyerNeedBar view={view} onOpenAssistant={() => openAssistant()} />
         {view === "home" && <Home onNavigate={navigate} onSelect={setSelected} brief={brief} onBriefChange={setBrief} onAskAi={openAssistant} />}
         {view === "standard" && <StandardFlow selected={selected} onSelect={setSelected} onHome={() => navigate("home")} onCustom={() => navigate("custom")} onComplete={() => navigate("home")} onLeadCreated={addLead} brief={brief} onBriefChange={setBrief} onAskAi={openAssistant} />}
         {view === "custom" && <CustomFlow onHome={() => navigate("home")} onComplete={() => navigate("home")} onLeadCreated={addLead} brief={brief} onAskAi={openAssistant} />}
