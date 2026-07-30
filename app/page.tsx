@@ -471,7 +471,7 @@ function AiAssistantDrawer({
       <button className="ai-assistant-backdrop" aria-label={c("关闭选型助理", "Close product advisor")} onClick={onClose} />
       <aside className="ai-assistant-drawer" aria-label={c("JOYNEXT AI 选型助理", "JOYNEXT AI Product Advisor")}>
         <header>
-          <div><span>AI</span><p><small>PRODUCT ADVISOR</small><b>{c("JOYNEXT AI 选型助理", "JOYNEXT AI Product Advisor")}</b></p></div>
+          <div><span className="assistant-brand-mark" aria-hidden="true"><strong>AI</strong></span><p><small>PRODUCT ADVISOR</small><b>{c("JOYNEXT AI 选型助理", "JOYNEXT AI Product Advisor")}</b></p></div>
           <button onClick={onClose} aria-label={c("关闭", "Close")}>×</button>
         </header>
         <div className="assistant-context">
