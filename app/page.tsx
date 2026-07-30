@@ -176,6 +176,11 @@ function configuredPriceLabel(product: Product, configuration: Record<string, st
   return `${locale === "en" ? "RMB " : "¥"}${total.toLocaleString()}${quantity === 1 ? (locale === "en" ? " / pc" : " / 件") : ""}`;
 }
 
+function usesDomesticDelivery(country: string) {
+  const normalized = country.trim().toLowerCase().replace(/\s+/g, "");
+  return ["中国", "中国大陆", "中华人民共和国", "china", "mainlandchina", "prc", "cn"].includes(normalized);
+}
+
 const discoveryGoals: DiscoveryBrief["goal"][] = [
   "导航与避障",
   "姿态与平衡",
@@ -898,7 +903,7 @@ function Home({
                     <small>{standardUnitPriceRanges[product.id] ? c("参考单价", "Indicative unit price") : c("价格方式", "Pricing")}</small>
                     <strong>{productPriceLabel(product, locale)}</strong>
                     <em>{standardUnitPriceRanges[product.id]
-                      ? c("仅供参考 · 具体价格请与销售确认", "For reference · Confirm with sales")
+                      ? c("含税参考 · 具体价格请与销售确认", "Tax-inclusive reference · Confirm with sales")
                       : c("根据最终方案与工程范围确认", "Confirmed against final solution and scope")}</em>
                   </div>
                   <div className="spec-chips">{product.verified.slice(0, 2).map((spec) => <span key={spec}>{v(spec)}</span>)}</div>
@@ -976,7 +981,7 @@ function ProductList({
         <button className={product.id === selected.id ? "select-card selected" : "select-card"} onClick={() => onSelect(product)} key={product.id}>
           <div className="select-image"><img src={product.image} alt="" /><span>{v(product.kind)}</span>{product.id === recommendedId && <b className="ai-select-match">{c("优先匹配", "Top match")}</b>}</div>
           <div><small>{product.model}</small><h3>{v(product.name)}</h3><p>{v(product.description)}</p></div>
-          <div className="select-bottom"><strong>{productPriceLabel(product, locale)}</strong><span>{publication.state === "scheduled" ? publication.detail : v(product.lead)}</span></div>
+          <div className="select-bottom"><strong className="tax-inclusive-price"><span>{productPriceLabel(product, locale)}</span><small>{c("含税参考", "Tax incl. ref.")}</small></strong><span>{publication.state === "scheduled" ? publication.detail : v(product.lead)}</span></div>
         </button>
         );
       })}
@@ -1067,6 +1072,21 @@ function StandardFlow({
     ((configuredFieldCount + (customerComplete ? 1 : 0)) / (selected.configuration.length + 1)) * 100,
   );
   const customerLocation = `${v(customer.country)} · ${customer.city}`;
+  const domesticDelivery = usesDomesticDelivery(customer.country);
+  const deliveryTerms = domesticDelivery
+    ? {
+        label: c("物流方式", "Shipping method"),
+        value: c("国内陆运 / 快递（待确认）", "Domestic road / parcel (TBC)"),
+        note: c("承运商、运费与到货时间由销售确认。", "Carrier, freight and arrival date require sales confirmation."),
+      }
+    : {
+        label: c("国际贸易条款", "Incoterms"),
+        value: c("FCA / FOB（待确认）", "FCA / FOB (TBC)"),
+        note: c("最终条款、起运地、国际运费、关税及进口税费由销售确认。", "Final term, origin, international freight, duties and import taxes require sales confirmation."),
+      };
+  const taxNotice = domesticDelivery
+    ? c("含税参考价；税率与发票类型以正式报价为准。", "Tax-inclusive reference; tax rate and invoice type are subject to the formal quote.")
+    : c("含税参考价；不含国际运费、关税及进口税费。", "Tax-inclusive reference; international freight, duties and import taxes are excluded.");
   const recommendations = useMemo(() => recommendProducts(brief, products), [brief, products]);
   const recommended = recommendations[0];
 
@@ -1130,9 +1150,9 @@ function StandardFlow({
       scene: [...new Set(procurementProducts.map(({ product }) => product.kind))].join(" / "),
       stage: totalProcurementQuantity > 10 ? "小批量验证" : "样品 / Demo",
       target: procurementItems.length > 1 ? "多产品交期由销售统一确认" : procurementProducts[0].product.lead,
-      need: `客户一次性提交集采报单，共 ${procurementItems.length} 项、${totalProcurementQuantity} 件：\n${itemSummary}\n需要统一确认正式价格、库存、分批交付与整体交期。`,
+      need: `客户一次性提交集采报单，共 ${procurementItems.length} 项、${totalProcurementQuantity} 件：\n${itemSummary}\n${taxNotice}\n${deliveryTerms.label}：${deliveryTerms.value}。需要统一确认正式价格、库存、分批交付与整体交期。`,
       address: `${customer.country} ${customer.city} ${customer.address}${customer.postalCode ? `，${customer.postalCode}` : ""}`,
-      nextAction: procurementItems.length > 1 ? "销售核对集采明细，合并确认价格、库存与交付排期。" : totalProcurementQuantity > 10 ? "销售确认批量库存、阶梯价格和交付排期。" : "销售确认订单、正式价格和发货安排。",
+      nextAction: procurementItems.length > 1 ? `销售核对集采明细，合并确认价格、库存、${deliveryTerms.label}与交付排期。` : totalProcurementQuantity > 10 ? `销售确认批量库存、阶梯价格、${deliveryTerms.label}和交付排期。` : `销售确认订单、正式价格、${deliveryTerms.label}和发货安排。`,
       estimatedPrice: procurementItems.length ? procurementPriceLabel : "评估后报价",
     };
     setOrderId(id);
@@ -1313,7 +1333,11 @@ function StandardFlow({
               <div><dt>{c("产品项", "Line items")}</dt><dd>{procurementItems.length} {c("项", "items")}</dd></div>
               <div><dt>{c("总数量", "Total quantity")}</dt><dd>{totalProcurementQuantity} {c("件", "pcs")}</dd></div>
             </dl>
-            <div className="price-row"><span>{c("集采配置总价", "Configured total")}</span><strong>{procurementPriceLabel}</strong></div>
+            <div className="price-row"><span>{c("集采配置总价", "Configured total")}<small>✓ {taxNotice}</small></span><strong>{procurementPriceLabel}</strong></div>
+            <div className="delivery-term-row">
+              <div><small>{deliveryTerms.label}</small><strong>{deliveryTerms.value}</strong></div>
+              <p>{deliveryTerms.note}</p>
+            </div>
             <p className="small-note">{customerComplete
               ? locale === "zh" ? `客户：${customer.company} · ${customerLocation}。` : `Customer: ${customer.company} · ${customerLocation}. `
               : c("请完整填写公司、联系人和收货地址后提交。", "Complete the company, contact and delivery details before submitting. ")}
@@ -1333,8 +1357,8 @@ function StandardFlow({
           <div className="confirmation-card">
             <div><small>{c("产品项", "Line items")}</small><strong>{procurementItems.length} {c("项", "items")}</strong></div>
             <div><small>{c("总数量", "Total quantity")}</small><strong>{totalProcurementQuantity} {c("件", "pcs")}</strong></div>
-            <div><small>{c("配置总价", "Configured total")}</small><strong>{procurementPriceLabel}</strong></div>
-            <div><small>{c("处理方式", "Handling")}</small><strong>{c("统一报价与排期", "Consolidated quote and schedule")}</strong></div>
+            <div><small>{c("含税配置总价", "Tax-inclusive configured total")}</small><strong>{procurementPriceLabel}</strong><span>{taxNotice}</span></div>
+            <div><small>{deliveryTerms.label}</small><strong>{deliveryTerms.value}</strong><span>{deliveryTerms.note}</span></div>
           </div>
           <div className="generated-procurement-sheet">
             <div><span>{c("集采明细", "Procurement details")}</span><b>{orderId}</b></div>
@@ -1347,7 +1371,7 @@ function StandardFlow({
                 <em>{configuredPriceLabel(product, itemConfiguration, locale, quantity)}</em>
               </article>
             ))}
-            <p>{c("仅供参考，正式价格与交付以销售确认为准。", "For reference only; final terms require sales confirmation.")}</p>
+            <p>{taxNotice} {deliveryTerms.label}{locale === "zh" ? "：" : ": "}{deliveryTerms.value}{locale === "zh" ? "。" : ". "}{deliveryTerms.note} {c("仅供参考，正式价格与交付以销售确认为准。", "For reference only; final terms require sales confirmation.")}</p>
           </div>
           <div className="customer-profile-card">
             <div className="customer-profile-heading"><span>{c("联系与收货信息", "Contact and delivery details")}</span><b>{c("已随采购意向提交", "Submitted with your request")}</b></div>
