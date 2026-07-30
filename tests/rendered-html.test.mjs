@@ -51,6 +51,7 @@ test("renders development preview metadata", async () => {
 test("streams non-thinking Qwen responses and renders Markdown safely", async () => {
   const route = await readFile(new URL("../app/api/assistant/route.ts", import.meta.url), "utf8");
   const page = await readFile(new URL("../app/page.tsx", import.meta.url), "utf8");
+  const styles = await readFile(new URL("../app/globals.css", import.meta.url), "utf8");
 
   assert.match(route, /qwen3\.7-flash/);
   assert.match(route, /stream:\s*true/);
@@ -68,6 +69,12 @@ test("streams non-thinking Qwen responses and renders Markdown safely", async ()
   assert.match(page, /function ProcurementDrawer/);
   assert.match(page, /onAddProduct\(product\)/);
   assert.match(page, /待配置/);
+  assert.match(page, /product-nav-dropdown/);
+  assert.match(page, /contact@joynext\.com/);
+  assert.match(page, /tel:\+8657487127249/);
+  assert.doesNotMatch(page, /onNavigateSection\("workflow"\)/);
+  assert.match(styles, /\.floating-order-button:hover/);
+  assert.match(styles, /\.contact-footer/);
 });
 
 test("provides demo product publishing operations without a backend", async () => {

@@ -554,12 +554,14 @@ function AiAssistantDrawer({
 function Header({
   onNavigate,
   onNavigateSection,
+  onNavigateCategory,
   onOpenAssistant,
   procurementCount,
   onOpenProcurement,
 }: {
   onNavigate: (view: View) => void;
   onNavigateSection: (sectionId: string) => void;
+  onNavigateCategory: (category: string) => void;
   onOpenAssistant: () => void;
   procurementCount: number;
   onOpenProcurement: () => void;
@@ -569,10 +571,25 @@ function Header({
     <header className="site-header">
       <Logo onClick={() => onNavigate("home")} />
       <nav aria-label={c("主导航", "Main navigation")}>
-        <button onClick={() => onNavigateSection("products")}>{c("产品", "Products")}</button>
+        <div className="product-nav-menu">
+          <button className="product-nav-trigger" onClick={() => onNavigateCategory("全部产品")} aria-haspopup="menu">
+            {c("产品", "Products")} <span>⌄</span>
+          </button>
+          <div className="product-nav-dropdown" role="menu">
+            {[
+              ["全部产品", c("全部产品", "All products")],
+              ["计算与控制", c("计算与控制", "Computing & control")],
+              ["3D 感知", c("3D 感知", "3D perception")],
+              ["环境感知", c("环境感知", "Environment sensing")],
+              ["运动感知", c("运动感知", "Motion sensing")],
+            ].map(([category, label]) => (
+              <button role="menuitem" key={category} onClick={() => onNavigateCategory(category)}>{label}<span>→</span></button>
+            ))}
+          </div>
+        </div>
         <button onClick={() => onNavigateSection("scenarios")}>{c("应用场景", "Applications")}</button>
-        <button onClick={() => onNavigateSection("workflow")}>{c("采购方式", "How to buy")}</button>
         <button onClick={() => onNavigateSection("support")}>{c("选型支持", "Selection support")}</button>
+        <button onClick={() => onNavigateSection("contact")}>{c("联系方式", "Contact")}</button>
       </nav>
       <div className="header-actions">
         <button className="header-procurement-button" onClick={onOpenProcurement} aria-label={c(`查看采购单，已有 ${procurementCount} 项`, `View procurement list, ${procurementCount} items`)}>
@@ -782,6 +799,16 @@ function Home({
     if (catalogFilter === "全部产品") return products;
     return products.filter((product) => product.kind === catalogFilter);
   }, [catalogFilter, locale, products, query, recommendations]);
+
+  useEffect(() => {
+    const selectCategory = (event: Event) => {
+      const category = (event as CustomEvent<string>).detail;
+      setCatalogFilter(category);
+      setQuery("");
+    };
+    window.addEventListener("joynext:product-category", selectCategory);
+    return () => window.removeEventListener("joynext:product-category", selectCategory);
+  }, []);
 
   function startSearch(event: FormEvent) {
     event.preventDefault();
@@ -1785,10 +1812,22 @@ function OperationsDashboard({
 function Footer() {
   const { c } = useClientCopy();
   return (
-    <footer>
-      <Logo inverse />
-      <p>{c("JOYNEXT 机器人元器件 · 产品选型、询价与项目支持", "JOYNEXT Robotics Components · Selection, quotation and project support")}</p>
-      <div><a href="#products">{c("产品", "Products")}</a><a href="#scenarios">{c("应用", "Applications")}</a><a href="#support">{c("支持", "Support")}</a><span>© 2026 JOYNEXT</span></div>
+    <footer className="contact-footer" id="contact">
+      <div className="contact-footer-intro">
+        <span>CONTACT JOYNEXT</span>
+        <h2>{c("让销售与工程团队继续协助。", "Continue with sales and engineering.")}</h2>
+        <p>{c("发送产品型号、数量和项目阶段，我们会安排后续沟通。", "Share the model, quantity and project stage for follow-up.")}</p>
+      </div>
+      <div className="contact-footer-methods">
+        <a href="mailto:contact@joynext.com"><small>{c("电子邮箱", "Email")}</small><strong>contact@joynext.com</strong><span>↗</span></a>
+        <a href="tel:+8657487127249"><small>{c("联系电话", "Phone")}</small><strong>+86 0574 8712 7249</strong><span>↗</span></a>
+        <div><small>{c("中国总部", "China headquarters")}</small><strong>{c("浙江省宁波市高新区清逸路 99 号", "No. 99 Qingyi Road, Hi-Tech Park, Ningbo")}</strong></div>
+      </div>
+      <div className="contact-footer-bottom">
+        <Logo inverse />
+        <p>{c("机器人元器件选型、询价与项目支持", "Robotics component selection, quotation and project support")}</p>
+        <div><a href="#products">{c("产品", "Products")}</a><a href="#scenarios">{c("应用", "Applications")}</a><a href="#support">{c("支持", "Support")}</a><span>© 2026 JOYNEXT</span></div>
+      </div>
     </footer>
   );
 }
@@ -1909,6 +1948,16 @@ export default function HomePage() {
     });
   };
 
+  const navigateToProductCategory = (category: string) => {
+    setView("home");
+    window.requestAnimationFrame(() => {
+      window.requestAnimationFrame(() => {
+        window.dispatchEvent(new CustomEvent("joynext:product-category", { detail: category }));
+        document.getElementById("products")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+    });
+  };
+
   const addLead = (lead: LeadRecord) => {
     setLeads((current) => [lead, ...current.filter((item) => item.id !== lead.id)]);
   };
@@ -1950,6 +1999,7 @@ export default function HomePage() {
           <Header
             onNavigate={navigate}
             onNavigateSection={navigateToSection}
+            onNavigateCategory={navigateToProductCategory}
             onOpenAssistant={() => openAssistant()}
             procurementCount={procurementItems.length}
             onOpenProcurement={() => setProcurementOpen(true)}
