@@ -16,8 +16,8 @@ type AssistantContext = {
   language?: string;
 };
 
-const providerBaseUrl = (process.env.AI_BASE_URL ?? "https://api.sudocode.chat/v1").replace(/\/$/, "");
-const providerModel = process.env.AI_MODEL ?? "gpt-5.4-mini";
+const providerBaseUrl = (process.env.AI_BASE_URL ?? "https://llm-ou0bo993n0k4i8b6.cn-beijing.maas.aliyuncs.com/compatible-mode/v1").replace(/\/$/, "");
+const providerModel = process.env.AI_MODEL ?? "qwen3.6-flash";
 const requestWindows = new Map<string, { startedAt: number; count: number }>();
 
 function getClientId(request: Request) {
