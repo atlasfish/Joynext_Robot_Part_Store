@@ -101,7 +101,25 @@ const products: Product[] = productCatalog.map((product) => ({
   ...product,
   image: withBasePath(product.image),
 }));
-const demoUnitPrices: Record<string, number> = {};
+
+const standardUnitPriceRanges: Record<string, { low: number; high: number }> = {
+  fisheye: { low: 1800, high: 3200 },
+  "depth-25": { low: 2800, high: 4500 },
+  "depth-48": { low: 3500, high: 5800 },
+  "depth-100": { low: 4800, high: 7600 },
+  "imu-mcu": { low: 1500, high: 2800 },
+};
+
+function standardPriceLabel(productId: string, locale: ClientLocale, quantity = 1) {
+  const range = standardUnitPriceRanges[productId];
+  if (!range) return locale === "en" ? "Quoted after review" : "评估后报价";
+  const low = range.low * quantity;
+  const high = range.high * quantity;
+  if (locale === "en") {
+    return `RMB ${low.toLocaleString()}–${high.toLocaleString()}${quantity === 1 ? " / pc" : ""}`;
+  }
+  return `¥${low.toLocaleString()}–¥${high.toLocaleString()}${quantity === 1 ? " / 件" : ""}`;
+}
 
 const discoveryGoals: DiscoveryBrief["goal"][] = [
   "导航与避障",
@@ -768,6 +786,13 @@ function Home({
                   <small>{product.model} · {c("资料", "Source")} P.{product.sourceSlide}</small>
                   <h3>{v(product.name)}</h3>
                   <p>{v(product.description)}</p>
+                  <div className={standardUnitPriceRanges[product.id] ? "product-price-preview available" : "product-price-preview"}>
+                    <small>{standardUnitPriceRanges[product.id] ? c("参考单价", "Indicative unit price") : c("价格方式", "Pricing")}</small>
+                    <strong>{standardPriceLabel(product.id, locale)}</strong>
+                    <em>{standardUnitPriceRanges[product.id]
+                      ? c("仅供参考 · 具体价格请与销售确认", "For reference · Confirm with sales")
+                      : c("根据最终方案与工程范围确认", "Confirmed against final solution and scope")}</em>
+                  </div>
                   <div className="spec-chips">{product.verified.slice(0, 2).map((spec) => <span key={spec}>{v(spec)}</span>)}</div>
                   <div className="product-foot">
                     <button onClick={() => onAskAi(locale === "zh" ? `请解释 ${product.model} ${product.name} 的能力、适用场景、与相近产品的差异，以及哪些信息仍需工程师确认。` : `Explain ${product.model} ${v(product.name)}, its suitable applications, differences from similar products, and what still needs engineering confirmation.`)}>{c("咨询产品", "Ask about product")}</button>
@@ -829,14 +854,14 @@ function ProductList({
   onSelect: (p: Product) => void;
   recommendedId: string;
 }) {
-  const { c, v } = useClientCopy();
+  const { locale, c, v } = useClientCopy();
   return (
     <div className="selection-grid">
       {products.map((product) => (
         <button className={product.id === selected.id ? "select-card selected" : "select-card"} onClick={() => onSelect(product)} key={product.id}>
           <div className="select-image"><img src={product.image} alt="" /><span>{v(product.kind)}</span>{product.id === recommendedId && <b className="ai-select-match">{c("优先匹配", "Top match")}</b>}</div>
           <div><small>{product.model}</small><h3>{v(product.name)}</h3><p>{v(product.description)}</p></div>
-          <div className="select-bottom"><strong>{v(product.price)}</strong><span>{v(product.lead)}</span></div>
+          <div className="select-bottom"><strong>{standardPriceLabel(product.id, locale)}</strong><span>{v(product.lead)}</span></div>
         </button>
       ))}
     </div>
@@ -890,7 +915,8 @@ function StandardFlow({
     }));
   const engineering = selected.engineeringReview;
   const primaryInterface = configuration.interface ?? configuration.realtime ?? configuration.network ?? "按所选方案";
-  const total = (demoUnitPrices[selected.id] ?? 0) * qty;
+  const hasStandardPrice = Boolean(standardUnitPriceRanges[selected.id]);
+  const estimatedTotalLabel = standardPriceLabel(selected.id, locale, qty);
   const customerComplete = [customer.company, customer.contact, customer.contactDetail, customer.country, customer.city, customer.address]
     .every((value) => value.trim().length > 0);
   const customerLocation = `${v(customer.country)} · ${customer.city}`;
@@ -953,7 +979,7 @@ function StandardFlow({
       need: `客户选择 ${Object.entries(configuration).map(([key, value]) => `${key}=${value}`).join("；")}，提交 ${qty} 件采购意向，需要确认正式价格、库存和交期。`,
       address: `${customer.country} ${customer.city} ${customer.address}${customer.postalCode ? `，${customer.postalCode}` : ""}`,
       nextAction: qty > 10 ? "销售确认批量库存、阶梯价格和交付排期。" : "销售确认订单、正式价格和发货安排。",
-      estimatedPrice: total ? `¥${total.toLocaleString()}` : "工程确认后报价",
+      estimatedPrice: hasStandardPrice ? standardPriceLabel(selected.id, "zh", qty) : "工程确认后报价",
     };
     setOrderId(id);
     onLeadCreated(lead);
@@ -1106,7 +1132,7 @@ function StandardFlow({
               {selected.configuration.slice(0, 3).map((item) => <div key={item.key}><dt>{stripRequiredMark(v(item.label))}</dt><dd>{v(configuration[item.key])}</dd></div>)}
               <div><dt>{c("数量", "Quantity")}</dt><dd>{qty} {c("件", "pcs")}</dd></div><div><dt>{c("交期", "Lead time")}</dt><dd>{v(selected.lead)}</dd></div>
             </dl>
-            <div className="price-row"><span>{c("价格", "Price")}</span><strong>{total ? `¥${total.toLocaleString()}` : c("提交后确认", "Confirmed after review")}</strong></div>
+            <div className="price-row"><span>{hasStandardPrice ? c("参考总价", "Indicative total") : c("价格", "Price")}</span><strong>{estimatedTotalLabel}</strong></div>
             <p className="small-note">{customerComplete
               ? locale === "zh" ? `客户：${customer.company} · ${customerLocation}。` : `Customer: ${customer.company} · ${customerLocation}. `
               : c("请完整填写公司、联系人和收货地址后提交。", "Complete the company, contact and delivery details before submitting. ")}

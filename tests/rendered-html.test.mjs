@@ -38,6 +38,8 @@ test("renders development preview metadata", async () => {
   assert.match(html, /从需求出发/);
   assert.match(html, /找到符合采购条件的候选产品/);
   assert.match(html, /提交采购意向/);
+  assert.match(html, /参考单价/);
+  assert.match(html, /¥3,500–¥5,800/);
   assert.match(html, /切换为英文/);
   assert.doesNotMatch(html, /选型 Copilot 持续在线/);
   assert.doesNotMatch(html, /标准件订单已生成/);
